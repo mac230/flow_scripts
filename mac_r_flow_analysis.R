@@ -756,7 +756,7 @@ all.groups.df <- lapply(all.groups.e, function(x){
 
 
 ## add the strain factor to the dataframes
-for(i in 1:lekngth(all.groups.df)){
+for(i in 1:length(all.groups.df)){
     all.groups.df[[i]]$strain <- strain.factor[[i]]
 }
 
@@ -801,7 +801,7 @@ invisible(lapply(1:length(all.groups.df), function(x){
 ## [x]
 ## replicate mean stripcharts
 ## start by creating a list of lists identical in size to the individual replicates list
-kall.data.means <- vector(mode = "list", length = length(all.data.e))
+all.data.means <- vector(mode = "list", length = length(all.data.e))
 all.data.means <- lapply(1:length(all.data.e), function(x){
                              all.data.means[[x]] <- lapply(1:length(all.data.e[[x]]), function(y){
                                                                all.data.means[[x]][[y]] <- vector(mode = "list", length = length(all.data.e[[x]][[y]]))
@@ -864,7 +864,7 @@ strain.rep.factor <- lapply(1:length(all.data.e), function(x){
                             })
 
 
-kfor(i in 1:length(all.data.means)){
+for(i in 1:length(all.data.means)){
     all.data.means[[i]]$strain <- strain.rep.factor[[i]]
 }
 
@@ -961,7 +961,7 @@ for(i in 1:length(all.data.medians)){
     names(all.data.medians[[i]]) <- params
 }
 
-kstrain.rep.factor <- vector(mode = "list", length = length(all.data.e))
+strain.rep.factor <- vector(mode = "list", length = length(all.data.e))
 strain.rep.factor <- lapply(1:length(all.data.e), function(x){
                                 strain.rep.factor[[x]] <- factor(x =  unlist(lapply(1:length(all.data.e[[x]]), function(y){
                                                                                         rep(y, times = length(all.data.e[[x]][[y]]))
@@ -982,7 +982,7 @@ median.stripcharts.dir <- paste0(results.dir, "/between_groups_median_stripchart
 setwd(median.stripcharts.dir)
 
 
-lkapply(1:length(all.data.medians), function(x){
+lapply(1:length(all.data.medians), function(x){
            lapply(1:(ncol(all.data.medians[[x]]) - 1), function(y){
                       pdf(file = paste0(names(all.data.medians[x]), "_",
                                               names(all.data.medians[[x]][y]),
