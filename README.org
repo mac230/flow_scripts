@@ -1,0 +1,6 @@
+;; scripts for flow cytometry data analysis in R   -*- mode: org; fill-column: 80; eval: (elisp-org-hook); eval: (auto-fill-mode t) -*-
+
+* Flow Cytometry Analysis in R
+These are my scripts for analyzing flow cytometry data in R.  In general, they
+rely heavily on the 'flowcore' package from Bioconductor.  In addition, I use a
+custom version of 'set2frame' from the 'MetaCyto' Bioconductor package.  
