@@ -15,8 +15,9 @@ source(file = "~/Desktop/emacs/R/functions/set2frame.R")
 ## user-specified options - these will change for each analysis depending on strains/reporters
 ##############
 ## USER INPUT:
-############## 
-base.dir       <- "~/Desktop/data/flow/2019.05.22_Thr_dsRed_unfused_TFT_flow"
+##############
+## no trailing '/' at the end!
+base.dir       <- "~/Desktop/data/flow/2019.05.22_Thr_dsRed_unfused_TFT_flow" 
 setwd(base.dir)
 dir.create(path = paste0(base.dir, "/fcs"))
 dir.create(path = paste0(base.dir, "/results"))
@@ -103,10 +104,10 @@ all.set <- lapply(all.set, fsApply, trunc.fluors)
 
 PSV.TFT.transform <- function(x){
     transform(x,
-              `lGFP` = log10(`eGFP.A`),
-              `lRFP` = log10(`mCherry.A`),
-              `TFTR` = log(`mCherry.A`/`eGFP.A`, base = 2),
-              `PSVR` = log(`eGFP.A`/`mCherry.A`, base = 2))}
+              `log_GFP` = log10(`eGFP.A`),
+              `log_RFP` = log10(`mCherry.A`),
+              `TFT_ratio` = log(`mCherry.A`/`eGFP.A`, base = 2),
+              `PSV_ratio` = log(`eGFP.A`/`mCherry.A`, base = 2))}
 all.set <- lapply(all.set, fsApply, PSV.TFT.transform)
 
 
@@ -314,8 +315,8 @@ all.data <- lapply(all.data,
 logicle.trans <- logicleTransform(transformationId = "logicle fluor transform")
 logicle.func <- function(x){
     transform(x,
-              `lGFP` = logicle.trans(`eGFP.A`),
-              `lRFP` = logicle.trans(`mCherry.A`))}
+              `log_GFP` = logicle.trans(`eGFP.A`),
+              `log_RFP` = logicle.trans(`mCherry.A`))}
 
 all.data.l <- lapply(1:length(all.data), function(x){
                          lapply(all.data[[x]], function(y){
@@ -339,7 +340,7 @@ lapply(1:length(all.data.l), function(x){
            lapply(all.data.l[[x]], function(y){
                       lapply(y, function(q){
                       pdf(file = paste0(names(all.data[x]), "_", q@description$'TUBE NAME', ".pdf"), height = 7, width = 7)
-                      print(xyplot(`lRFP` ~ `lGFP`, data = q,  smooth = F,
+                      print(xyplot(`log_RFP` ~ `log_GFP`, data = q,  smooth = F,
                              strip = paste0(names(all.data[x]), "_", q@description$'TUBE NAME'),
                              prepanel=function()
                              {return(list(xlim = c(0, 4), ylim = c(0, 4)))}))
@@ -387,7 +388,7 @@ for(i in 1:length(all.frame.l)){
 lapply(1:length(all.frame.l), function(x){
            lapply(1:length(all.frame.l[[x]]), function(y){
                       pdf(file = paste0(names(all.frame.l[x]), "_", names(all.frame.l[[x]][y]), ".pdf"), height = 7, width = 7)
-                      print(xyplot(`lRFP` ~ `lGFP`, data = all.frame.l[[x]][[y]],  smooth = F,
+                      print(xyplot(`log_RFP` ~ `log_GFP`, data = all.frame.l[[x]][[y]],  smooth = F,
                                    strip = paste0(names(all.data[x]), "_", names(all.frame.l[[x]][y])),
                                    prepanel=function()
                                    {return(list(xlim = c(0, 4), ylim = c(0, 4)))}))
@@ -544,7 +545,7 @@ between.groups.dir <- paste0(results.dir, "/between_groups_plots")
 setwd(between.groups.dir)
 
 ## set up names and limits for parameters - these may have to change 
-## "FSC.A"  "SSC.A"  "eGFP.A" "mCherry.A" "Time"   "lgfp"   "lmch"   "tftr"   "psvr"  
+## "FSC.A" "SSC.A" "eGFP.A""mCherry.A" "Time" "log_GFP" "log_RFP" "TFT_ratio" "PSV_ratio"
 x.lab   <- names(all.groups.e[[1]][[1]])
 x.min   <- c(0, 0, 0, 0, 0, 2, 2, -6, -2)
 x.max   <- c(2.5e5, 2e5, 2e4, 2e4, 2.5e3, 5, 5, 2, 6)
@@ -755,7 +756,7 @@ all.groups.df <- lapply(all.groups.e, function(x){
 
 
 ## add the strain factor to the dataframes
-for(i in 1:length(all.groups.df)){
+for(i in 1:lekngth(all.groups.df)){
     all.groups.df[[i]]$strain <- strain.factor[[i]]
 }
 
@@ -769,7 +770,7 @@ fac.test <- lapply(all.groups.df, function(x){
 
 fac.test <- lapply(fac.test, function(x){
                        x <- x[x > 0]
-})
+                   })
 
 
 ## create pdfs
@@ -800,7 +801,7 @@ invisible(lapply(1:length(all.groups.df), function(x){
 ## [x]
 ## replicate mean stripcharts
 ## start by creating a list of lists identical in size to the individual replicates list
-all.data.means <- vector(mode = "list", length = length(all.data.e))
+kall.data.means <- vector(mode = "list", length = length(all.data.e))
 all.data.means <- lapply(1:length(all.data.e), function(x){
                              all.data.means[[x]] <- lapply(1:length(all.data.e[[x]]), function(y){
                                                                all.data.means[[x]][[y]] <- vector(mode = "list", length = length(all.data.e[[x]][[y]]))
@@ -830,9 +831,7 @@ all.data.mean.lines <- lapply(all.data.means, function(x){
 ## now bind the list of strains together via 'rbind'
 all.data.mean.lines <- lapply(all.data.mean.lines, function(x){
                                   as.data.frame(do.call("rbind", x))
-})
-
-
+                              })
 
 all.data.means <- lapply(all.data.means, function(x){
                              lapply(x, function(y){
@@ -850,6 +849,8 @@ all.data.means <- lapply(all.data.means, function(x){
                              do.call("rbind", x)
                          })
 
+
+
 params <- names(all.data.e[[1]][[1]][[1]])
 for(i in 1:length(all.data.means)){
     names(all.data.means[[i]]) <- params
@@ -863,7 +864,7 @@ strain.rep.factor <- lapply(1:length(all.data.e), function(x){
                             })
 
 
-for(i in 1:length(all.data.means)){
+kfor(i in 1:length(all.data.means)){
     all.data.means[[i]]$strain <- strain.rep.factor[[i]]
 }
 
@@ -935,7 +936,7 @@ all.data.median.lines <- lapply(all.data.medians, function(x){
 ## now bind the list of strains together via 'rbind'
 all.data.median.lines <- lapply(all.data.median.lines, function(x){
                                   as.data.frame(do.call("rbind", x))
-})
+                                })
 
 
 
@@ -960,7 +961,7 @@ for(i in 1:length(all.data.medians)){
     names(all.data.medians[[i]]) <- params
 }
 
-strain.rep.factor <- vector(mode = "list", length = length(all.data.e))
+kstrain.rep.factor <- vector(mode = "list", length = length(all.data.e))
 strain.rep.factor <- lapply(1:length(all.data.e), function(x){
                                 strain.rep.factor[[x]] <- factor(x =  unlist(lapply(1:length(all.data.e[[x]]), function(y){
                                                                                         rep(y, times = length(all.data.e[[x]][[y]]))
@@ -981,7 +982,7 @@ median.stripcharts.dir <- paste0(results.dir, "/between_groups_median_stripchart
 setwd(median.stripcharts.dir)
 
 
-lapply(1:length(all.data.medians), function(x){
+lkapply(1:length(all.data.medians), function(x){
            lapply(1:(ncol(all.data.medians[[x]]) - 1), function(y){
                       pdf(file = paste0(names(all.data.medians[x]), "_",
                                               names(all.data.medians[[x]][y]),
@@ -1010,8 +1011,6 @@ lapply(1:length(all.data.medians), function(x){
 ## [x]
 ## statistics
 ## set up directories
-
-
 setwd(base.dir)
 dir.create(path = paste0(base.dir, "/statistical_analysis"))
 stats.dir <- paste0(base.dir, "/statistical_analysis")
@@ -1020,18 +1019,11 @@ setwd(stats.dir)
 names(all.data.means[[1]])
 all.data.means[[1]][1:10, ]
 
-
-
-params <- c(params[1:(length(params)-1)], "nl_tftr", "strain")
-
-for(i in 1:length(all.data.means)){
-    all.data.means[[i]]$psvr <- all.data.means[[i]]$mCherry.A/all.data.means[[i]]$eGFP.A
-    names(all.data.means[[i]]) <- params
-}
-
-all.data.means
 lapply(1:length(all.data.means), function(x){
-           lapply(1:(ncol(all.data.means[[x]])-1), function(y){
+           lapply(1:(ncol(all.data.means[[x]])), function(y){
+                      
+                      if(!is.factor(all.data.means[[x]][, y])){
+                          
                       mean.aov <- aov(all.data.means[[x]][, y] ~ all.data.means[[x]]$strain)
                       s.mean   <- capture.output(summary(mean.aov))
                       ptest    <- capture.output(PostHocTest(x = mean.aov, method = "lsd", conf.level = 0.95))
@@ -1040,20 +1032,18 @@ lapply(1:length(all.data.means), function(x){
                             "-----\n",
                             s.mean, ptest), file = paste0(names(all.data.means[x]), "_means_statistics.txt") , sep = "\n",
                           append = T)
+                      }
                   })
        })
 
 
 
 
-for(i in 1:length(all.data.means)){
-    all.data.medians[[i]]$psvr <- all.data.medians[[i]]$mCherry.A/all.data.medians[[i]]$eGFP.A
-    names(all.data.medians[[i]]) <- params
-}
-
-
 lapply(1:length(all.data.medians), function(x){
            lapply(1:(ncol(all.data.medians[[x]])-1), function(y){
+                      
+                      if(!is.factor(all.data.means[[x]][, y])){
+                      
                       median.aov <- aov(all.data.medians[[x]][, y] ~ all.data.medians[[x]]$strain)
                       s.median   <- capture.output(summary(median.aov))
                       ptest      <- capture.output(PostHocTest(x = median.aov, method = "lsd", conf.level = 0.95))
@@ -1062,6 +1052,7 @@ lapply(1:length(all.data.medians), function(x){
                             "-----\n",
                             s.median, ptest), file = paste0(names(all.data.medians[x]), "_medians_statistics.txt") , sep = "\n",
                           append = T)
+                          }
                   })
        })
 
