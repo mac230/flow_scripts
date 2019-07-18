@@ -17,15 +17,24 @@ source(file = "~/Desktop/emacs/R/functions/set2frame.R")
 ## USER INPUT:
 ##############
 ## no trailing '/' at the end!
-base.dir       <- "~/Desktop/data/flow/2019.05.22_Thr_dsRed_unfused_TFT_flow" 
+base.dir       <- "~/Desktop/data/flow/2019.05.22_unfused_TFT_mCherry_sfGFP_flow" 
 setwd(base.dir)
-dir.create(path = paste0(base.dir, "/fcs"))
-dir.create(path = paste0(base.dir, "/results"))
-dir.create(path = paste0(base.dir, "/tables"))
-work.dir       <- paste0(base.dir, "/fcs")
-results.dir    <- paste0(base.dir, "/results")
-tables.dir     <- paste0(base.dir, "/tables")
 
+sub_dirs <- c("/fcs", "/results", "/tables", "/R_objects", "/statistical_analyses")
+
+sub_dir_create <- function(s_dir){
+    ifelse(dir.exists(paste0(base.dir, s_dir)),
+           paste0(s_dir, " exists!"),
+           dir.create(path = paste0(base.dir, s_dir)))
+}
+
+sapply(X = sub_dirs, FUN = sub_dir_create)
+
+work.dir    <- paste0(base.dir, "/fcs")
+results.dir <- paste0(base.dir, "/results")
+tables.dir  <- paste0(base.dir, "/tables")
+objs.dir    <- paste0(base.dir, "/R_objects")
+stats.dir   <- paste0(base.dir, "/statistical_analysis")
 
 
 
@@ -509,9 +518,6 @@ all.data.e <- lapply(all.data, function(x){
 ##-----
 ## [x]
 ## save the data as an R object for later loading if needed
-setwd(base.dir)
-dir.create(path = paste0(base.dir, "/R_objects"))
-objs.dir <- paste0(base.dir, "/R_objects")
 setwd(objs.dir)
 ## flowsets
 saveRDS(all.data, file = "curv_initial_ungated_flowsets")
@@ -1011,9 +1017,6 @@ lapply(1:length(all.data.medians), function(x){
 ## [x]
 ## statistics
 ## set up directories
-setwd(base.dir)
-dir.create(path = paste0(base.dir, "/statistical_analysis"))
-stats.dir <- paste0(base.dir, "/statistical_analysis")
 setwd(stats.dir)
 
 names(all.data.means[[1]])
