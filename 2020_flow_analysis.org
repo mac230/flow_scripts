@@ -1,0 +1,376 @@
+# My R script for flow cytometry analysis in R in a literate org doc
+
+* TODO [0%]
+
+    - [ ] remove any 'adjust = ' from density plots
+      + test w/ no adjust syntax in plot code
+
+    - [ ] finish formatting so it can run from MSI
+      + might also make a script to move stuff to and from MSI
+        - stick the R CMD batch in the middle, then delete everything when finished
+        - could rsync the dirs too to get all the results, none of the fcs
+
+    - [ ] re-write code for replicate plots
+      + ea. replicate = separate color
+      + mean trace = black
+
+    - [ ] re-do gating so that we take +/- 1.5 SDs of FSC and SSC instead of curv gate
+
+    - [ ] look into Christian's approach for fsc correction 
+
+    - [ ] more sensible legends 
+          + stop using "_"
+
+    - [ ] increase lwd on density plots
+          + maybe 1.5-2.5x
+
+#+NAME: christian_fsc_correction 
+#+BEGIN_SRC R
+
+subdataMC<-subdataMC[subdataMC$FSC.A>0 & subdataMC$SSC.A>0 & subdataMC$mCherry.A>0 & subdataMC$GFP.A>0,]
+subdataMC<-subdataMC[log(subdataMC$GFP.A)>4.8,]
+#plot(log(subdataMC$GFP.A),log(subdataMC$mCherry.A))test<-loess(log(subdataMC$mCherry.A)~subdataMC$FSC.A)
+subdataMC$mCHc<-unlist(test$residuals)+mean(log(subdataMC$mCherry.A))
+test2<-loess(log(subdataMC$GFP.A)~subdataMC$FSC.A)
+subdataMC$GFPc<-unlist(test2$residuals)+mean(log(subdataMC$GFP.A))
+
+#+END_SRC
+
+* Misc. Notes
+Remember that you can use radio buttons in the code as a means of generating
+links in the written portion of this document:
+
+[[goes_here][this_link]]
+
+<<goes_here>>
+
+* Flow Analysis Overview
+My approach to flow cytometry data analysis in R is to collect 10-50,000 cells
+of multiple biological replicates of the same strain/reporter and compare these
+across strains/reporters for a single flow session.  At present, I typically
+fill a 96-well plate with 7-8 biological replicates of each strain/reporter of
+interest and collect 10,000 cells from each well.  Collecting more cells per
+well (e.g., 50,000) does not seem to change the results appreciably and for
+several of the downstream analyses in this document, the mean of these 10,000
+cells is used as a single data point, making collecting additional cells
+unnecessary.  
+
+* [[Required_Packages]]
+The analysis requires several packages from both regular R package repositories
+and Bioconductor.  Setting up the script so that the packages are installed if
+they're not available has proven challenging.  I've attempted to do this using
+MSI as a test of whether the scripts are working.  Access to R through MSI is
+illustrated in the following script: 
+
+#+NAME: MSI_login_R_load
+#+BEGIN_SRC bash
+## -----
+## login to MSI/mesabi
+ssh mahlon@login.msi.umn.edu
+ssh mesabi
+
+## albert lab compute node
+ssh cn5711
+
+
+## -----
+## determine which R versions are available
+module avail R
+
+## load the latest version
+module load R/3.6.0
+## now calling R should load the above version (3.6.0)
+R
+#+END_SRC
+
+Installing packages, in particular Bioconductor packages, has been challenging
+using MSI.  One of the issues has been error messages about directory locking
+during package installation.  A solution to this issue is described here:
+[[https://stackoverflow.com/questions/14382209/r-install-packages-returns-failed-to-create-lock-directory][SO_link]]
+
+The solution boils down to setting an option for the install to [['--no-lock']] as
+shown in the link.  This seems to work with both 'install.packages' and
+'BiocManager::install'.
+
+* [[Reading_FCS_Files]]
+I've attempted to automate as much of the analysis of flow data as possible.
+The user needs to input information in certain places, however, and I've marked
+these places with the following placeholder:
+
+##############
+## USER INPUT:
+##############
+
+My general approach to analyzing the data after loading required packages is as
+follows:
+
+    - [1] set the working directory to the location of the data
+
+    - [2] build a directory structure for data, scripts, and results files: 
+          + directories for: 
+            - fcs files
+            - results
+            - tables
+            - scripts
+
+    - [3] read .fcs files using regex for strains
+          + regex is: 
+            - strain
+            - reporter
+            - replicate
+              > e.g., BY_rpn4_TFT_004.fcs
+
+    - [4] provide descriptive strain names for the plots
+          + e.g., "no reporter", "BY rpn4_sfGFP_TFT", etc...
+
+Once I've finished these steps, I build a list whose elements are the regex I'll
+use to read fcs files for individual strains.  I use lapply to find all the
+files that match all the strain names using the 'read.flowSet' function with a
+pattern option.  The result is a list of ungated flowsets named 'all.strains'.
+The length of all.strains is equal to the number of strains analyzed.  So, if I
+had the following strain regex list:
+
+no.reporter   <- ".*untagged.*fcs"
+by.rpn4.tft   <- "BY.*rpn4.*.fcs"
+rm.rpn4.tft   <- "RM.*rpn4.*.fcs"
+rpn4.rpn4.tft <- "rpn4.*rpn4.*.fcs"
+
+'all.strains' would be of length 4.  To access the individual replicates that
+make up each list element of all.strains, I would use syntax like:
+
+all.strains\[[2]\]\[[4]\], which would access the fourth replicate of
+'by.rpn4.tft' above.  
+
+In flowcore parlance, a 'flowSet' is simply a list of 'flowFrames', where
+flowFrames are individual .fcs files.  
+
+
+-----
+To ensure the regex I set up work as intended, I also write the replicate
+groupings of each flowSet in 'all.strains' to a table.   I recently (2020.03.05)
+re-did the function that groups the strains to write a more R/UNIX friendly
+table that shows which group each fcs file was assigned to and which regex was
+used to place it in a group.  The table is easily viewed using the following:
+
+column -t -s "," ./strain_replicate_groupings.txt
+
+* [[Transformation_and_Gating]]
+I apply two transformations to each flowframe initially: 
+
+    - [1] truncation transformation
+          + this converts 0's to 1's in the fluor channels
+          + this allows us to log10 transform the fluors
+            - i.e., log10(0) = -inf
+
+    - [2] ratio transformation
+          + this gives us the TFT and PSV ratios
+            - TFT ratio = log2(RFP/GFP)
+            - PSV ratio = log2(GFP/RFP)
+
+I use lapply in combination with its flowCore equivalent, 'fsApply'.  The
+result is that we apply the transform function to each flowframe via 'fsApply'
+via applying the function to each element of 'all.set' through 'lapply'.  i.e.,
+lapply fsApply using all.set.  
+
+
+
+#+BEGIN_SRC R
+## -----
+## <<Required_Packages>> 
+## check for Bioconductor and install if not available 
+ifelse(!requireNamespace("BiocManager", quietly = TRUE),
+       install.packages("BiocManager",
+                        dependencies = TRUE,
+                        repos = "http://cran.wustl.edu/",
+                        quiet = TRUE),
+       paste0("Bioconductor available"))
+require("BiocManager")
+
+## requireNamespace checks whether a package is available and loads if it is
+## the return value is logical and the function throws an error if not available 
+## if(!requireNamespace("DNAcopy")) paste0("package not available")
+## check that the output of requireNamespace is truly logical:
+## requireNamespace("dygraphs") == requireNamespace("lattice")     ## TRUE
+## requireNamespace("dygraphs") == requireNamespace("fakepackage") ## FALSE
+## ifelse(!requireNamespace("fakepackage"),
+##        paste0("no such package"),
+##        paste0("there is a package"))
+
+
+## -----
+## load packages or install if not available
+## have to split these out by bioconductor vs. non-bioconductor
+## non-bioconductor
+package_installer <- function(x){
+    if(!requireNamespace(x, quietly = TRUE))
+        install.packages(x, dependencies = TRUE,
+                         repos = "http://cran.wustl.edu/",
+                         quiet = TRUE, INSTALL_opts = '--no-lock')}
+packages <- c("colorspace", "lattice", "ggvis", "dygraphs")
+sapply(X = packages, FUN = package_installer)
+sapply(X = packages, FUN = require, character.only = TRUE)
+
+
+## -----
+## bioconductor
+bioc_package_installer <- function(x){if(!requireNamespace(x))
+                                          BiocManager::install(x, INSTALL_opts = '--no-lock')}
+bioc_packages <-  c("flowCore", "flowViz", "flowUtils", "flowStats", "flowFP", "geneplotter", "ggcyto")
+sapply(X = bioc_packages, FUN = bioc_package_installer)
+sapply(X = bioc_packages, FUN = require, character.only = TRUE)
+
+
+## -----
+## required for merging flowsets into a single flowframe 
+source(file = "https://raw.githubusercontent.com/mac230/flow_scripts/master/set2frame.R")
+
+
+##-----
+## <<Reading_FCS_Files>>
+## user-specified options - these will change for each analysis depending on strains/reporters
+##############
+## USER INPUT:
+##############
+## no trailing '/' at the end!
+base.dir       <- "~/Desktop/data/flow/2020.02.26_rpn4_sfGFP_flow"
+setwd(base.dir)
+needed.dirs <- c("/fcs", "/results", "/tables")
+dir.maker <- function(x){if(!dir.exists(paths = paste0(base.dir, x)))
+                             dir.create(path = paste0(base.dir, x))}
+sapply(X = needed.dirs, FUN = dir.maker)
+work.dir       <- paste0(base.dir, "/fcs")
+results.dir    <- paste0(base.dir, "/results")
+tables.dir     <- paste0(base.dir, "/tables")
+
+
+##-----
+## [x]
+## now set regex for getting flowsets of the different strains
+## generally, should name fcs files as follows:
+## strain    - by, rm, rpn4, rpn10
+## reporter  - PSV, TFT, untagged
+## replicate - 001, 002, etc... per strain
+##############
+## USER INPUT:
+##############
+no.reporter   <- ".*untagged.*fcs"
+by.rpn4.tft   <- "BY.*rpn4.*.fcs"
+rm.rpn4.tft   <- "RM.*rpn4.*.fcs"
+rpn4.rpn4.tft <- "rpn4.*rpn4.*.fcs"
+
+
+##############
+## USER INPUT:
+##############
+## for later use in plots
+strain.names <- c("no reporter", "BY rpn4 TFT", "RM rpn4 TFT", "rpn4 rpn4 TFT")
+
+
+##-----
+## [x]
+## bind all regex to a list and use the list to read files
+## the result here is a list of ungated flowSets
+## each flowset has 'n' tubes (flowframes), where n is the number of replicates
+## access a single flowFrame/tube w/ .e.g. "all.set[[1]][[1]]", which would be strain 1, tube 1
+##############
+## USER INPUT:
+##############
+setwd(work.dir)
+all.strains <- list(no.reporter,  
+                    by.rpn4.tft,  
+                    rm.rpn4.tft,  
+                    rpn4.rpn4.tft)
+
+all.set     <- lapply(all.strains, function(x){read.flowSet(files = NULL, path = ".", pattern = x, alter.names = T, min.limit = 1)})
+str(all.set[[1]]@phenoData@data$name)
+
+
+##################
+## END USER INPUT:
+##################
+
+
+##-----
+## [x]
+## write strain/replicate groupings to a table for inspection
+setwd(tables.dir)
+cat("File, Group, Strain", "\n", file = "strain_replicate_groupings.txt", append = F)
+strain.group    <- as.list(seq(from = 1, to = length(all.set), by = 1))
+replicates.out  <- unlist(lapply(1:length(all.set),
+                                 function(x)
+                                 {paste0(all.set[[x]]@phenoData@data$name, ", ",
+                                         strain.group[[x]], ", ", strain.names[[x]])}))
+replicate.table <- function(x){cat(c(x, "\n"), file = "strain_replicate_groupings.txt", append = T, sep = ", ")}
+sapply(X = replicates.out, FUN = replicate.table)
+
+
+##-----
+## <<Transformation_and_Gating>>
+## use the transform function to get the TFT/PSV parameters we want
+## start by converting 0's in fluors to 1's via truncate transform
+trunc.trans   <- truncateTransform("Convert 0's to 1's.", a = 1)
+trunc.fluors  <- function(x){
+    transform(x,
+              `eGFP.A` = trunc.trans(`eGFP.A`),
+              `mCherry.A` = trunc.trans(`mCherry.A`))}
+all.set <- lapply(all.set, fsApply, trunc.fluors)
+
+PSV.TFT.transform <- function(x){
+    transform(x,
+              `log_GFP` = log10(`eGFP.A`),
+              `log_RFP` = log10(`mCherry.A`),
+              `TFT_ratio` = log(`mCherry.A`/`eGFP.A`, base = 2),
+              `PSV_ratio` = log(`eGFP.A`/`mCherry.A`, base = 2))}
+all.set <- lapply(all.set, fsApply, PSV.TFT.transform)
+
+
+##-----
+## [x]
+## get the total number of cells for each flowFrame
+## nrow is passed as an optional arg to fsApply here
+total.cells <- lapply(all.set, fsApply, nrow)
+
+a <- all.set[[2]][[2]]
+xyplot(`SSC.A` ~ `FSC.A`, data = a, smooth = F,
+                 filter = curv2Filter(x = "FSC.A", y = "SSC.A", bwFac = 3, gridsize = c(250,250)))
+
+myf <- curv2Filter(x = "FSC.A", y = "SSC.A", bwFac = 3, gridsize = c(250,250))
+
+fam <- median(exprs(a$FSC.A))
+fmy <- c(fam - (fam * 0.25), fam + (fam * 0.25))
+sam <- median(exprs(a$SSC.A))
+smy <- c(sam - (sam * 0.25), sam + (sam * 0.25))
+
+rect <- rectangleGate(filterId = "FSC/SSC filter",
+                      "SSC.A" = smy, "FSC.A" = fmy)
+xyplot(`SSC.A` ~ `FSC.A`, data = a, smooth = F, filter = rect)
+plot(exprs(a$FSC.A), exprs(a$SSC.A), pch = 19, cex = 0.02)
+abline(v = fam)
+abline(v = mean(exprs(a$FSC.A)), col = "green")
+summary(a)
+
+nf <- norm2Filter(x = "FSC.A", y = "SSC.A", method = "covMcd")
+
+xyplot(`SSC.A` ~ `FSC.A`, data = a, smooth = F, filter = nf)
+
+b <- all.set[[1]][[2]]
+
+xyplot(`SSC.A` ~ `FSC.A`, data = b, smooth = F, filter = nf)
+
+new_set <- read.flowSet(path = "~/Desktop/data/flow/2020.03.11_norm2Filter_testing/fcs")
+a <- new_set[[10]]
+nf <- norm2Filter(x = "FSC-A", y = "SSC-A", method = "cov.rob", scale.factor = 1)
+xyplot(`SSC.A` ~ `FSC.A`, data = a, smooth = F, filter = nf, stat = TRUE, abs = TRUE, pos = 0.5)
+ellipsoidGate
+
+a_s <- split(new_set[[10]], km)
+a_s
+
+
+xyplot(`SSC.A` ~ `FSC.A`, data = a, smooth = F, filter = km)
+xyplot(`SSC-A` ~ `FSC-A`, data = a_s[[1]], smooth = F)
+xyplot(`SSC-A` ~ `FSC-A`, data = new_set[[10]], smooth = F)
+a_s <- a_s[[1]]
+
+kmeansFilter
+#+END_SRC
