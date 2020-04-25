@@ -2,31 +2,31 @@
 
 [[stopping_point]]
 
-* TODO Issues [14%]
-
-    - [X] remove any 'adjust = ' from density plots
-      + test w/ no adjust syntax in plot code
+* TODO Issues [71%]
 
     - [ ] finish formatting so it can run from MSI
       + might also make a script to move stuff to and from MSI
         - stick the R CMD batch in the middle, then delete everything when finished
         - could rsync the dirs too to get all the results, none of the fcs
 
-    - [ ] re-write code for replicate plots
-      + ea. replicate = separate color
-      + mean trace = black
+    - [ ] look into Christian's approach for fsc correction
 
-    - [ ] re-do gating so that we take +/- 1.5 SDs of FSC and SSC instead of curv gate
+    - [X] +remove any 'adjust = ' from density plots+
+      + +test w/ no adjust syntax in plot code+
 
-    - [ ] look into Christian's approach for fsc correction 
+    - [X] +re-write code for replicate plots+
+      + +ea. replicate = separate color+
+      + +mean trace = black+
 
-    - [ ] more sensible legends 
-      + stop using "_"
+    - [X] +re-do gating so that we take +/- 1.5 SDs of FSC and SSC instead of curv gate+
 
-    - [ ] increase lwd on density plots
-      + maybe 1.5-2.5x
+    - [X] +more sensible legends+
+      + +stop using+ "_"
 
-#+NAME: christian_fsc_correction 
+    - [X] +increase lwd on density plots+
+      + +maybe 1.5-2.5x+
+
+#+NAME: christian_fsc_correction
 #+BEGIN_SRC R
 
 subdataMC<-subdataMC[subdataMC$FSC.A>0 & subdataMC$SSC.A>0 & subdataMC$mCherry.A>0 & subdataMC$GFP.A>0,]
@@ -55,14 +55,14 @@ interest and collect 10,000 cells from each well.  Collecting more cells per
 well (e.g., 50,000) does not seem to change the results appreciably and for
 several of the downstream analyses in this document, the mean of these 10,000
 cells is used as a single data point, making collecting additional cells
-unnecessary.  
+unnecessary.
 
 * [[Required_Packages]]
 The analysis requires several packages from both regular R package repositories
 and Bioconductor.  Setting up the script so that the packages are installed if
 they're not available has proven challenging.  I've attempted to do this using
 MSI as a test of whether the scripts are working.  Access to R through MSI is
-illustrated in the following script: 
+illustrated in the following script:
 
 #+NAME: MSI_login_R_load
 #+BEGIN_SRC bash
@@ -94,7 +94,7 @@ The solution boils down to setting an option for the install to [['--no-lock']] 
 shown in the link.  This seems to work with both 'install.packages' and
 'BiocManager::install'.
 
-* [[color_setup]]
+* [[Color_Setup]]
 #+DATE: 2020.04.21
 My color setup uses the same color for each strain background.  So, for example,
 the BY strains always use the same blue color, the RM strains always use the
@@ -121,7 +121,7 @@ there is not particularly straightforward.  I use the following steps:
 
     - [1] 'sapply' the strain-color regular expression as a pattern for 'grepl'
       and use the strain names as the vector to match against.  The result of
-      this operation is an n*6 table, where n is the number of strains.  
+      this operation is an n*6 table, where n is the number of strains.
 
     - [2] 'sapply' each column of the n*6 table.  I collapse across the rows in
       each column to a single, logical value.  Basically, if a strain name
@@ -130,7 +130,13 @@ there is not particularly straightforward.  I use the following steps:
 
     - [3] I then unlist the color list and subset on the logical vector above.
       This gives a color vector that is the same length and order as the strain
-      list and can be used in subsequent plotting operations. 
+      list and can be used in subsequent plotting operations.
+
+For the FSC density curves, I take advantage of the fact that:
+
+length(all.set) == length(all.cols)
+
+and 'Map' over both to get density plots that are colored by strain.
 
 * [[Reading_FCS_Files]]
 I've attempted to automate as much of the analysis of flow data as possible.
@@ -146,15 +152,15 @@ follows:
 
     - [1] set the working directory to the location of the data
 
-    - [2] build a directory structure for data, scripts, and results files: 
-          + directories for: 
+    - [2] build a directory structure for data, scripts, and results files:
+          + directories for:
             - fcs files
             - results
             - tables
             - scripts
 
     - [3] read .fcs files using regex for strains
-          + regex is: 
+          + regex is:
             - strain
             - reporter
             - replicate
@@ -179,10 +185,10 @@ rpn4.rpn4.tft <- "rpn4.*rpn4.*.fcs"
 make up each list element of all.strains, I would use syntax like:
 
 all.strains\[[2]\]\[[4]\], which would access the fourth replicate of
-'by.rpn4.tft' above.  
+'by.rpn4.tft' above.
 
 In flowcore parlance, a 'flowSet' is simply a list of 'flowFrames', where
-flowFrames are individual .fcs files.  
+flowFrames are individual .fcs files.
 
 
 -----
@@ -194,8 +200,8 @@ used to place it in a group.  The table is easily viewed using the following:
 
 column -t -s "," ./strain_replicate_groupings.txt
 
-* [[Transformation_and_Gating]]
-I apply two transformations to each flowframe initially: 
+* [[TFT_Transformation]]
+I apply two transformations to each flowframe initially:
 
     - [1] truncation transformation
           + this converts 0's to 1's in the fluor channels
@@ -210,13 +216,262 @@ I apply two transformations to each flowframe initially:
 I use lapply in combination with its flowCore equivalent, 'fsApply'.  The
 result is that we apply the transform function to each flowframe via 'fsApply'
 via applying the function to each element of 'all.set' through 'lapply'.  i.e.,
-lapply fsApply using all.set.  
+lapply fsApply using all.set.
+
+* [[Cell_Gating]]
+This analysis considers each sample at three levels of gating:
+
+    - [1] ungated
+    - [2] forward/side scatter (FSC/SSC) gating out of cell clumps and
+          non-cellular debris
+    - [3] FSC-based gating of haploids
+
+For a sample of 10,000 cells, I expect the following numbers of cells for each
+gate:
+
+    - [1] ungated :: 10,000
+    - [2] FSC/SSC :: 7,600
+    - [3] FSC haploid :: 2,400
+
+The FSC/SSC gating is done using the 'curv2Filter' function, which finds areas
+of high local density in a sample.  The key parameters are the bwFac (bandwidth
+factor) and the gridsize.  Basically, I set these to large values to grab the
+central 'cloud' of cells in the sample.  This is relatively crude, but should
+eliminate clumps of cells (high FSC/SSC) and non-cellular debris (low FSC/SSC).
+
+The FSC haploid gating is a more restrictive gating approach that removes
+approximately 75% of the cells from the sample.  The FSC density plot of haploid
+cells is characterized by a high peak and long, descending right shoulder.  I
+take the cells in the 10% above and 10% below of the peak.  This nicely captures
+the peak and excludes everything else in the plot.  My preliminary results
+suggest that the effect of this gating is to reduce the variance of the sample,
+without altering the mean/median of the fluorescent reporters.
+
+I plot the gating results a lot of different ways, with the overall goal being
+to ensure that any results I observe from the reporters are not a result of a
+gating mishap.  I plot both the entire sample with the gate overlaid, as well as
+the gated populations themselves to ensure that the results align with each
+other at each step in the process.
+
+[[FSC_SSC_Gate]]
+This is a curv2Filter gate with large bandwidth settings.  By comparison, a very
+tight FSC/SSC gate would use a bwFac setting of 2.  Here, I used a bwFac setting
+of 7.  I write this as a custom function then use 'lapply' and 'fsApply'
+together to apply it to each sample in the run.  The data structure of the
+samples are as follows:
+
+'all.set' is the entirety of the samples.  It is a list of flowSets and each
+flowSet is a list of flowframes (individual flow cytometry runs).  Therefore,
+lapply applies the fsApply function to each element of the 'all.set' list.  In
+turn, fsApply applies the custom gating and splitting function to each flowframe
+in each all.set list element.  The result ('initial.split.all') is a list of
+gated flowSets.
+
+[[FSC_Gate]]
+This gate takes the 10% of cells above and 10% of cells below the peak of the
+FSC density plot.  To get the values of this gate, I wrote a custom function
+'fsc.gate.generator'.  The values 'fsc.gate.generator' returns are used to split
+the cells using the 'rectangleGate' function.  A nice feature of 'rectangleGate'
+is that only 1 dimension needs to be input (in this case, FSC).  If no value is
+supplied for the other dimension (in this case, SSC), the function simply takes
+the min/max values for that parameter.  Therefore, the resulting split gates the
+cells on FSC without applying any gating on SSC.
+
+* [[Gate-Based_Subsetting]]
+The gated cells are put into the following lists:
+
+    - [1] FSC gated - c.final.frame
+    - [2] FSC/SSC gated - i.final.frame
+    - [3] ungated - u.final.frame
+
+Because each sample in each of the above lists is still coded as a flowset, I
+use 'lapply' and 'for' loops to subset the flowSets.  These then get combined
+into a long, ungrouped list (i.e., no grouping of replicates by strain).  I then
+combine these long lists into a single list, 'all.data', for further analysis.
+This structure works well for single-sample analyses.  I then group back into
+strain groups later in the analysis.
+
+For both the FSC/SSC and FSC-based gatings, the flowSets that result have a
+length of 1 (because I keep only the populations I'm interested in).  The
+alternative would be to include all populations, which would produce flowSets
+with length > 1.  For example, with the FSC gate, if I kept all populations, the
+result would be a list with length 2, with population 1 ('rectangleGate+') and
+population 2 ('rest').  Because I only keep the population I'm interested in,
+the subsetting I use needs only to take the first (i.e., only) flowFrame from
+each sample's flowSet.
+
+I then apply the tube name to each element of the gated and ungated data.
+Applying this name allows me to group samples using regular expressions in a
+later step. To do so:
+
+    - [1] return sample names by printing the original tube name from the fcs
+          files ('tube.names')
+
+    - [2] use 'grepl' to return a logical vector of whether each fcs file
+          matches a given strain regular expression
+          + e.g., "RM.*.fcs" matches RM, doesn't match doa10
+
+    - [3] subset the long list of ungrouped flowsets using 'lapply' with the
+      logical vectors below.
+
+    - [4] this creates three-tiered list structure
+          + 1. gate (curv, initial, or ungated)
+          + 2. strain (BY, RM, rpn4, etc...)
+          + 3. replicate (001, 002, etc...)
+
+    - [5] use the set2Frame function to merge all replicates into a single frame
+
+* [[Cell_Count_Table_and_Plots]]
+I create a table of the cell counts for each gate (curv, initial, or ungated)
+for each sample.  Each gate is a column in the table.  Strain is a factor with
+each genetic background being a level.  The ungated cells are a control for the
+process by which we get cell counts, i.e., the value should be the same for all
+samples (e.g., 10,000).  I write the cell counts to a .txt table then read this
+information in for plotting of cell counts by strain by gate.  The cell count
+plots are basic box plots.  I don't set the y axis for these plots, which tends
+to exaggerate the differences, but I'm not likely to use the plots for
+publication, so I don't think this is a critical issue.
+
+* [[Check_Gate_Groupings]]
+This section provides another check on the results of my analysis to ensure that
+samples were separated into appropriate groups.  It writes a data file that
+shows which samples were grouped together at each of the three gating levels
+(curv, initial, and ungated).  The output is not a table, but rather a list of
+the sample names and their grouping at each gating level.
+
+* [[Data_Frame_Conversion]]
+The code so far accesses sample data stored in the flowFrame data structure.
+For the subsequent analyses, it is useful to have the data in the more
+accessible dataframe format.  Therefore, I use an 'lapply' call to a custom
+function that converts each flowFrame into a dataframe and store the output in
+the object 'all.data.e' (where 'e' = 'exprs').
+
+I then save the flowFrames and exprs matrices as R objects in case I need to
+access them again in the future.  The objects can be quite large (> 18 mb), so
+I may consider deleting these in the future.
+
+* [[Between_Groups_Processing]]
+This step creates an object ('all.groups.e') that merges individual replicates
+into a single dataframe.  Since the call is made via 'rbind', the resultant
+object is a dataframe, NOT a flowFrame.  I nest multiple 'lapply' calls to cover
+the following levels:
+
+    - [1] all.data.e\[\[1:n\]\]
+          + the different gate levels
+
+    - [2] all.data.e\[\[1:n\]\][\[1:n\]\]
+          + the different strain levels
+
+The result is that each strain at each gating level is merged into a single
+dataframe for subsequent between-groups analyses.
+
+Note that the 'rbind' step MUST be done via 'do.call' or it won't work.
+
+I then add strain names to each dataframe that results from this operation.
+
+* [[Between_Groups_Plots]]
+This analysis creates density plots that show the between-strains effects at the
+group level (i.e., does not show any individual replicates).  The idea is to
+group all the cells of a given strain background and build a density plots that
+compares all strains for all collected parameters.
+
+I set up a number of custom parameters here that are not data-driven and just a
+result of my own experience with flow data that I produce.  I haven't come up
+with a good way to generate data-driven axes and given how much individual
+reporters vary across the parameter space, I'm not sure I want to.  The
+standardized values for each parameter mean that the axes have the same values
+across runs, which is nice for comparison purposes.  A related issue has been
+positioning the legend in a way that doesn't obscure data.  I tried to do this
+in a parameter-driven way previously, but now just put it at "topleft".  This
+doesn't seem to affect any of the key plots and I can always move stuff in
+inkscape if needed.  Another advantage of custom, user-input axis values is
+protection against extreme values.  For example, the TFT ratio can be extremely
+high in the untagged strains, because the GFP and RFP signals are a result of
+stochastic detector noise.  So, values of RFP = 500 and GFP = 4 yields a TFT
+ratio of 500/4 = 125.  A typical TFT ratio doesn't exceed 1.  However, since R
+sets the axes based on maximum values, the above scenario would produce a TFT
+ratio plot with an improper axis for viewing between groups differences. 
+
+I do use custom code to get the y-axis values of the density plot.  This is
+critical for overplotting between-groups data.  In particular, for the TFT
+ratio, deletion strains typically have high maximum density values that center around 0
+(in log2 space).  In contrast, wild-type strains with high degrons have low
+maximum density values and extend into negative side of the number line in the
+log2 plot.  Therefore, I get the maximum y value from the density of each group
+at each gate level and use this as the y axis value for the between groups
+plots.  I multiply this value by a scaling factor (1.1) to ensure that no data
+extends out of the plotting area. 
+
+The actual plotting is done via a call to 'Map' using gate and the names of the
+gates for grabbing data and file naming, respectively.  Within this 'Map' call,
+I loop over (1) parameters via a 'for' loop, (2) strains via a 'Map' loop, and
+(3) strain names via a 'Map' loop to generate all combinations of gates and
+parameters.  
+
+* [[Between_Groups_Replicates]]
+This analysis creates density plots between groups, with individual replicates
+plotted as thin lines and the group average plotted as a thick line.  The idea
+is to loop over gates, then over parameters, then over strains, then over
+individual replicates.  The strain groups and individual replicates are
+separately looped via their corresponding objects ('all.groups.e', 'all.data.e',
+respectively).
+
+To generate the plots, I make an empty plot for each parameter then use 'Map'
+and 'lapply' functions to add the strains and replicates.  The lines for the
+individual replicates are added via a nested 'lapply' function.  The key to
+visualizing the individual replicates and group averages is using a thin line
+for individual replicates and a thick line for group averages.
+
+* [[Between_Gates_Plots]]
+This analysis overplots each parameter at the three different gate levels I use
+(FSC ['curv'], FSC/SSC ['initial'], and ungated).  The idea behind the analysis
+is to examine how each parameter changes as a result of the gating operations I
+perform.  In general, the gating reduces variability but does not alter the
+parameter mean/median (or has a smaller effect on mean/median).  I apply the
+strain colors to each plot and distinguish between gating levels by varying the
+line type for each gate level.
+
+I perform these analyses on the grouped data (all replicates of a given genetic
+background as a single dataframe).  I use a custom function to get the y limit
+value for each density plot.  The ylim will, in practice, almost always come from the
+ungated cells, but I run it across gates just to be safe.
+
+I use a 'Map' call with a custom function to do all plotting.  I map across
+genetic backgrounds and strain names.  The former get the data for the plot, the
+latter get the file name and plot titles.  The initial call to 'plot' starts
+uses the 'curv' gate, which actually has the lowest values for most parameters,
+but it doesn't matter because the x/y axes limits are set via custom objects.
+
+* [[Replicate_Plots]]
+This analysis creates density plots of each replicate of a strain/reporter for
+each parameter collected.  The goal is to use a separate color for each
+replicate to make identifying outlier samples easier.  In addition to each
+replicate, the combination of all replicates as a single sample is plotted for
+comparison (in a neutral gray color).  The plotting is performed for each of the
+three gating levels (FSC ['curv'], FSC/SSC ['initial'], and ungated).
+
+We start by 'lapply'ing over the 'all.groups.e' object, which groups all of the
+replicates as a single strain background.  In general, the code here involves
+looping over looping first over the gating level, then over the strain level,
+then over the individual replicates.
+
+I use the 'all.groups.e' object to get y axis limits for each plot.  In
+practice, this can lead to individual replicates extending outside the plotting
+area, but this isn't a critical issue, since I (likely) won't publish these data
+anyway.
+
+As in the previous sections, the plot is initially created without lines and I
+use 'lapply' over the different levels to actually fill in the plot.  The legend
+links each replicate to a unique color, making it easy to identify outliers.
+
+As in most of these analyses, I'm finding 'gsub', which replaces strings in
+text, a very valuable function for creating file names.
 
 * Flow Analysis Source Code
 #+BEGIN_SRC R
 ## -----
-## <<Required_Packages>> 
-## check for Bioconductor and install if not available 
+## <<Required_Packages>>
+## check for Bioconductor and install if not available
 ifelse(!requireNamespace("BiocManager", quietly = TRUE),
        install.packages("BiocManager",
                         dependencies = TRUE,
@@ -226,7 +481,7 @@ ifelse(!requireNamespace("BiocManager", quietly = TRUE),
 require("BiocManager")
 
 ## requireNamespace checks whether a package is available and loads if it is
-## the return value is logical and the function throws an error if not available 
+## the return value is logical and the function throws an error if not available
 ## if(!requireNamespace("DNAcopy")) paste0("package not available")
 ## check that the output of requireNamespace is truly logical:
 ## requireNamespace("dygraphs") == requireNamespace("lattice")     ## TRUE
@@ -260,7 +515,7 @@ sapply(X = bioc_packages, FUN = require, character.only = TRUE)
 
 
 ## -----
-## required for merging flowsets into a single flowframe 
+## required for merging flowsets into a single flowframe
 source(file = "https://raw.githubusercontent.com/mac230/flow_scripts/master/set2frame.R")
 
 
@@ -305,6 +560,7 @@ doa10.thr.tft <- "doa10.*Thr.*.fcs"
 strain.names <- c("no reporter", "BY Thr TFT", "RM Thr TFT", "doa10 Thr TFT")
 
 
+
 ##-----
 ## [x]
 ## bind all regex to a list and use the list to read files
@@ -315,9 +571,9 @@ strain.names <- c("no reporter", "BY Thr TFT", "RM Thr TFT", "doa10 Thr TFT")
 ## USER INPUT:
 ##############
 setwd(work.dir)
-all.strains <- list(no.reporter,  
-                    by.thr.tft,  
-                    rm.thr.tft,  
+all.strains <- list(no.reporter,
+                    by.thr.tft,
+                    rm.thr.tft,
                     doa10.thr.tft)
 
 all.set     <- lapply(all.strains, function(x){read.flowSet(files = NULL, path = ".", pattern = x, alter.names = T, min.limit = 1)})
@@ -329,7 +585,7 @@ all.set     <- lapply(all.strains, function(x){read.flowSet(files = NULL, path =
 
 
 ## -----
-## <<color_setup>>
+## <<Color_Setup>>
 ## linking colors to strain names in R
 ## I think I should be able to make something
 ## akin to an lisp association list where
@@ -349,6 +605,7 @@ col.out <- as.logical(unlist(sapply(1:ncol(col.out), FUN = function(x){
                       max(col.out[, x])
                       })))
 all.cols <- unlist(sapply(X = cols.list[col.out], FUN = function(x){identity(x["color"])}))
+
 
 ## output a dummmy plot to assess strain/color mapping
 setwd(results.dir)
@@ -379,7 +636,7 @@ sapply(X = replicates.out, FUN = replicate.table)
 
 
 ##-----
-## <<Transformation_and_Gating>>
+## <<TFT_Transformation>>
 ## use the transform function to get the TFT/PSV parameters we want
 ## start by converting 0's in fluors to 1's via truncate transform
 trunc.trans   <- truncateTransform("Convert 0's to 1's.", a = 1)
@@ -396,7 +653,8 @@ PSV.TFT.transform <- function(x){
               `TFT_ratio` = log(`mCherry.A`/`eGFP.A`, base = 2),
               `PSV_ratio` = log(`eGFP.A`/`mCherry.A`, base = 2),
               ## 'no log' TFT ratio
-              `nl_TFT_ratio` = `mCherry.A`/`eGFP.A`)}
+              `nl_TFT_ratio` = (`mCherry.A`/`eGFP.A`)
+              )}
 all.set <- lapply(all.set, fsApply, PSV.TFT.transform)
 
 
@@ -408,10 +666,12 @@ total.cells <- lapply(all.set, fsApply, nrow)
 
 
 ##-----
+## <<Cell_Gating>>
 ## [x]
 ## 02.27.2019 try this w/ curv2Filter w/ a big bandwidth setting to grab the
 ## main cloud of cells we take only cells in 'area 1' (the gate), not 'rest'
 ## (the cells outside the gate)
+## <<FSC_SSC_Gate>>
 initial.split <- function(x) {
     split(x, f = curv2Filter(x = "FSC.A", y = "SSC.A", bwFac = 7, gridsize = c(250,250)),
           population = "area 1", flowSet = TRUE, codeflowSet = TRUE)
@@ -440,7 +700,7 @@ lapply(all.set, fsApply, xy.initial.pdf)
 
 
 ##-----
-## [x] - 2020.04.19 - no longer using due to fsc gating approach below 
+## [x] - 2020.04.19 - no longer using due to fsc gating approach below
 ## plot the results of the pre-filter plus curv2Filter gating
 ## start by undoing the complicated list structure the filter operation creates
 ## this yields a list of flowSets
@@ -457,10 +717,11 @@ lapply(all.set, fsApply, xy.initial.pdf)
 
 
 ## -----
+## <<FSC_Gate>>
 ## a function to gate the cells to include only haploids.
 ## we identify these as a sharp peak in the lower end of
 ## the fsc density plot.  I take 10% above and below the
-## max density value 
+## max density value
 fsc.gate.generator <- function(x){
     fsc.dens  <- density(exprs(x[, 1]))
     ## return the index of the maximum y value of the density estimate
@@ -483,24 +744,36 @@ curv.set <- lapply(all.set, fsApply, curv.split)
 ## start by undoing the complicated list structure the filter operation creates
 ## this yields a list of flowSets
 setwd(cell.gate.dir)
-xy.fsc.curv.pdf <- function(x) {
+xy.fsc.curv.pdf <- function(x){
     pdf(file = paste0("curv_", x@description$"TUBE NAME", "_.pdf"), height = 7, width = 7)
     print(xyplot(`SSC.A` ~ `FSC.A`, data = x, main = x@description$"TUBE NAME",
                  filter = rectangleGate("FSC.A" = fsc.gate.generator(x)),
                  smooth = F))
     dev.off()
-lapply(all.set, fsApply, xy.fsc.curv.pdf)
-
-fsc.density.curv.pdf <- function(x){
-    pdf(file = paste0("fsc_density_", x@description$"TUBE NAME", "_.pdf"), height = 7, width = 7)
-    plot(density(exprs(x[, 1])), xlab = colnames(exprs(x))[1], main = x@description$"TUBE NAME")
-    abline(v = fsc.gate.generator(x), col = gray(0.4), lty = 3, lwd = 2)
-    dev.off()
-}
-lapply(all.set, fsApply, fsc.density.curv.pdf)
+    lapply(all.set, fsApply, xy.fsc.curv.pdf)
+    }
 
 
-## NOT WORKING - SEEMS THESE ARE NOT GETTING CODED AS FLOWFRAMES/SETS
+## plot the fsc density and associated gate
+## I use 'Map' here to color the plots by strain 
+fsc.density.curv.pdf <- function(data, color){
+    fsApply(data, function(x){
+                pdf(file = paste0("fsc_density_", x@description$"TUBE NAME", "_.pdf"),
+                    height = 7, width = 7)
+                plot(density(exprs(x[, 1])),
+                     xlab = colnames(exprs(x))[1],
+                     main = x@description$"TUBE NAME",
+                     col = color, lwd = 2.5)
+                abline(v = fsc.gate.generator(x),
+                       col = gray(0.4),
+                       lty = 3, lwd = 2.5)
+                dev.off()
+            }
+            )}
+
+Map(f = fsc.density.curv.pdf, all.set, all.cols)
+
+
 gated.xy.fsc.curv.pdf <- function(x){
     pdf(file = paste0("xy_sub_population_curv_", x@description$"TUBE NAME", "_.pdf"), height = 7, width = 7)
     print(xyplot(`SSC.A` ~ `FSC.A`, data = x, main = x@description$"TUBE NAME",
@@ -510,8 +783,546 @@ gated.xy.fsc.curv.pdf <- function(x){
 }
 lapply(curv.set, function(x){lapply(x, fsApply, gated.xy.fsc.curv.pdf)})
 
-## so, what do the final sets needs to look like as data structures? 
+
+## -----
+## <<Gate-Based_Subsetting>>
+## [x]
+## the output of the filtering operation is a list
+## curv.set:
+## 1. curv.set -> list of flowsets
+##    curv.set[[1]] -> flowSet w/ 4 experiments
+
+##    2. curv.set[[1]][[1]] -> flowSet
+##       flowSet of the different curv gates
+
+##       3. curv.set[[1]][[1]][[1]] -> the actual flowframe of each gate
+##                                     ("defaultRectangleGate+")
+
+## use unlist to get a simpler list structure
+## the result is a list of flowsets
+
+
+## now convert the list of fsc-gated flowsets into a list of list of
+## Start by unlisting the original dataset.
+## Then loop over the unlisted data and grab the flowframe of interest.
+curv.set <- unlist(curv.set)
+c.final.frame  <- list()
+
+for(i in 1:length(curv.set)){
+    c.final.frame[[i]] <- curv.set[[i]][[1]]
+}
+
+
+##-----
+## [x]
+## list of flowsets that result from the first filter
+## i.final.frame is a list of flowFrames
+i.set <- unlist(initial.split.all)
+i.final.frame <- list()
+for(i in 1:length(i.set)){
+i.final.frame[[i]] <- i.set[[i]][[1]]
+}
+
+
+##-----
+## [x]
+## list of flowsets of the ungated cells
+## u.final.frame is a list of flowFrames
+u.set <- unlist(lapply(all.set, fsApply, list))
+u.final.frame <- list()
+for(i in 1:length(u.set)){
+u.final.frame[[i]] <- u.set[[i]]
+}
+
+
+##-----
+## [x]
+## get the names of the original samples and use them as regex
+## 'grepl' returns logical output; w/ 'lapply', test each regex on the list of file/tube names
+tube.names <- unlist(lapply(c.final.frame, function(x) {print(x@description$GUID.original)}))
+strain.regex.logical <- lapply(all.strains, function(x){grepl(x = tube.names, pattern = x)})
+
+
+##-----
+## [x]
+## now use the logical vectors for grouping
+all.data <- list(curv = c.final.frame, initial = i.final.frame, ungated = u.final.frame)
+names(all.data)
+
+
+## 1. all.data is a list of 3 lists, each of these 3 lists is a list of 24 ungrouped flowframes
+## 2. lapply all.data to pass a list of 24 flowframes to a function
+## 3. make that function an lapply to pass each of 24 flowframes to some test
+## 4. end result should be a list of 3, with each of these 3 lists having 5 lists (strains)
+## 3 levels to all.data -> all.data[[I-gated_set]][[II-strain_replicates]][[III-individual flowframe]]
+all.data <- lapply(all.data,
+                   function(x){
+                       lapply(seq_along(strain.regex.logical),
+                              function(y){
+                                  x[strain.regex.logical[[y]]]
+                              })
+                   })
+
+
+##-----
+## [x]
+## now we do logicle transform for plotting 
+logicle.trans <- logicleTransform(transformationId = "logicle fluor transform")
+logicle.func <- function(x){
+    transform(x,
+              `log_GFP` = logicle.trans(`eGFP.A`),
+              `log_RFP` = logicle.trans(`mCherry.A`))}
+
+all.data.l <- lapply(1:length(all.data), function(x){
+                         lapply(all.data[[x]], function(y){
+                                    lapply(y, function(q){
+                                               logicle.func(q)}
+                                           )}
+                                )})
+
+
+##-----
+## [x]
+## logicle plots of individual samples
+setwd(results.dir)
+dir.create(path = paste0(results.dir, "/logicle_2D_plots_individual"))
+logicle.dir <- paste0(results.dir, "/logicle_2D_plots_individual")
+setwd(logicle.dir)
+
+lapply(1:length(all.data.l), function(x){
+           lapply(all.data.l[[x]], function(y){
+                      lapply(y, function(q){
+                      pdf(file = paste0(names(all.data[x]), "_", q@description$'TUBE NAME', ".pdf"), height = 7, width = 7)
+                      print(xyplot(`log_RFP` ~ `log_GFP`, data = q,  smooth = F,
+                             strip = paste0(names(all.data[x]), "_", q@description$'TUBE NAME'),
+                             prepanel=function()
+                             {return(list(xlim = c(0, 4), ylim = c(0, 4)))}))
+                      dev.off()
+                      })
+                  })
+           })
+
+
+##-----
+## [x]
+## per gate per group logicle plots
+## set up lists for each gate
+setwd(results.dir)
+dir.create(path = paste0(results.dir, "/logicle_2D_plots_groups"))
+logicle.groups.dir <- paste0(results.dir, "/logicle_2D_plots_groups")
+setwd(logicle.groups.dir)
+
+
+## set up lists for each gate
+c.frame.l   <- vector(mode = "list", length = length(strain.names))
+i.frame.l   <- vector(mode = "list", length = length(strain.names))
+u.frame.l   <- vector(mode = "list", length = length(strain.names))
+all.frame.l <- list(curv = c.frame.l, initial = i.frame.l, ungated = u.frame.l)
+
+
+## convert individual flowsets to single flowframes
+all.frame.l <- lapply(1:length(all.frame.l), function(x){
+                          lapply(1:length(all.frame.l[[x]]), function(y){
+                                     all.frame.l[[x]][[y]] <- set2Frame(as(unlist(all.data.l[[x]][[y]]), "flowSet"))
+                                 })
+                      })
+
+
+## name the frames that will comprise each gate
+## 'gsub' removes spaces 
+names(all.frame.l) <- names(all.data)
+for(i in 1:length(all.frame.l)){
+    names(all.frame.l[[i]]) <- gsub(pattern = " ", replacement = "_", x = strain.names)
+}
+
+
+## plot
+## 'gsub' here ensures no spaces in file names
+lapply(1:length(all.frame.l), function(x){
+           lapply(1:length(all.frame.l[[x]]), function(y){
+                      pdf(file = paste0(names(all.frame.l[x]), "_", gsub(" ", "_", names(all.frame.l[[x]][y])), ".pdf"), height = 7, width = 7)
+                      print(xyplot(`log_RFP` ~ `log_GFP`, data = all.frame.l[[x]][[y]],  smooth = F,
+                                   strip = paste0(names(all.data[x]), " ", names(all.frame.l[[x]][y])),
+                                   prepanel=function()
+                                   {return(list(xlim = c(0, 4), ylim = c(0, 4)))}))
+                      dev.off()
+                  })})
+
+
+##-----
+## <<Cell_Count_Table_and_Plots>>
+## [x]
+## check that final data result has expected number of cells
+## write the number of cells from each gating step to a table
+setwd(tables.dir)
+
+c.counts <- unlist(lapply(all.data[[1]], function(x){
+                              lapply(x, function(y){
+                                         nrow(y)
+                                     })
+                          }))
+
+i.counts <- unlist(lapply(all.data[[2]], function(x){
+                              lapply(x, function(y){
+                                         nrow(y)
+                                     })
+                          }))
+
+u.counts <- unlist(lapply(all.data[[3]], function(x){
+                              lapply(x, function(y){
+                                         nrow(y)
+                                     })
+                          }))
+
+table.names <- unlist(lapply(all.data[[1]], function(x){
+                                 lapply(x, function(y){
+                                            print(y@description$GUID.original)
+                                        })
+                             }))
+
+table_factor <- vector(mode = "list", length = length(all.set))
+for(i in 1:length(all.set)){
+    table_factor[[i]] <- rep(i, times = length(all.set[[i]]))
+    }
+table_factor <- unlist(table_factor)
+
+all.cell.counts <- list(curv_gate = c.counts, initial_gate = i.counts, ungated = u.counts, table.factor = table_factor, names = table.names)
+write.table(x = all.cell.counts, file = "cell_counts_by_gate.txt", append = F, sep = ",", quote = F, row.names = F)
+
+cell.data <- read.csv(file = "cell_counts_by_gate.txt", header = T)
+cell.data$table.factor <- factor(x = cell.data$table.factor, levels = unique(cell.data$table.factor), labels = strain.names)
+
+
+##-----
+## [x]
+## box plots of cell counts x group
+setwd(results.dir)
+dir.create(path = paste0(results.dir, "/cell_count_plots"))
+cell.count.dir <- paste0(results.dir, "/cell_count_plots")
+setwd(cell.count.dir)
+lapply(1:length(all.data), function(x){
+           pdf(file = paste0("cell_count_boxplot_", names(all.data[x]), ".pdf"), height = 7, width = 7, bg = "transparent")
+           par(cex.axis = 0.8)
+           boxplot(cell.data[, x] ~ cell.data$table.factor, ylab = "Cell Count", col = gray(0.9))
+           dev.off()})
+
+
+## single pdf of all cell counts
+par(mfrow = c(3,1))
+pdf(file = "all_cell_counts_boxplot_.pdf", height = 7, width = 7, bg = "transparent")
+lapply(1:length(all.data), function(x){
+           par(cex.axis = 0.8)
+           boxplot(cell.data[, x] ~ cell.data$table.factor, ylab = "Cell Count", col = gray(0.9))
+       })
+dev.off()
+par(mfrow = c(1,1))
+
+
+##-----
+## <<Check_Gate_Groupings>>
+## [x]
+## get tube names for each set of samples
+## unlist step results in a list of lists -> out[[I - gate]][[II - strain]]
+out <- lapply(all.data, function(x){
+                  lapply(x, function(y){
+                             unlist(lapply(y, function(q){
+                                        print(strsplit(x = q@description$GUID.original, split = "_[0-9]{3}.fcs"))
+                                    }))
+                         })
+              })
+
+
+##-----
+## [x]
+## write output to a file that gives replicate grouping across frames of 'out'
+setwd(tables.dir)
+for(i in 1:length(out)){
+    for(j in 1:length(i)){
+        for(k in 1:length(j)){
+            cat(paste0(out[[i]], "_", names(out[i])), file = "gates_by_groups_list.txt", append = T, sep = "\n")
+        }
+    }
+}
+
+
+##-----
+## <<Data_Frame_Conversion>>
+## [x]
+## convert to data frames
+all.data.e <- lapply(all.data, function(x){
+                         lapply(x, function(y){
+                                    lapply(y, function(q){
+                                               q <- as.data.frame(exprs(q))
+                                           })
+                                })
+                     })
+
+
+##-----
+## [x]
+## save the data as an R object for later loading if needed
+setwd(base.dir)
+dir.create(path = paste0(base.dir, "/R_objects"))
+objs.dir <- paste0(base.dir, "/R_objects")
+setwd(objs.dir)
+## flowsets
+saveRDS(all.data, file = "curv_initial_ungated_flowsets")
+## exprs matrix
+saveRDS(all.data.e, file = "curv_initial_ungated_flowsets_exprs")
+## test <- readRDS(file = "curv_initial_ungated_sets")
+
+
+##-----
+## <<Between_Groups_Processing>>
+## [x]
+## between groups stuff
+## start by grouping replicates in a list of lists
+all.groups.e <- lapply(all.data.e, function(x){
+                           lapply(x, function(y){
+                                      x <- do.call("rbind", y)
+                                  })
+                       })
+
+## name the backgrounds in each dataset
+## remember, have to 'for' loop this; can't use 'lapply'
+for(i in seq_along(all.groups.e)){
+           names(all.groups.e[[i]]) <- strain.names
+       }
+
+
+##-----
+## <<Between_Groups_Plots>>
+## [x]
+## need to add names to individual elements
+setwd(results.dir)
+dir.create(path = paste0(results.dir, "/between_groups_plots"))
+between.groups.dir <- paste0(results.dir, "/between_groups_plots")
+setwd(between.groups.dir)
+
+## set up names and limits for parameters - these may have to change
+## these are for density plots, so x axis is what's below
+## "FSC.A" "SSC.A" "eGFP.A" "mCherry.A" "Time"
+## "log_GFP" "log_RFP" "TFT_ratio" "PSV_ratio" "nl_TFT_ratio"
+x.lab   <- gsub(pattern = "_", replacement = " ", names(all.groups.e[[1]][[1]]))
+x.min   <- c(0, 0, 0, 0, 0, 2, 2, -6, -2, 0)
+x.max   <- c(2.5e5, 2e5, 2e4, 2e4, 2.5e3, 5, 5, 2, 6, 1)
+leg.pos <- c(rep("topright", 5), "topleft", rep("topright", 3))
+
+## ylim takes the min and max of the density each parameter
+## i.e., the values will always be low
+y.lim <- vector(mode = "list", length = 3)
+for(h in 1:length(y.lim)){
+    for(i in 1:length(x.lab)){
+        y.lim[[h]][i] <- max(
+            unlist(lapply(all.groups.e[[h]],
+                          function(x){1.1 * max(density(x[, i])$y)
+                                           })
+                   ))}}
+
+
+Map(f = function(gate, name){
+        for(i in 1:length(x.lab)){
+            ## get y limit for density plot
+            lapply(1:length(all.groups.e[[1]]),
+                   function(x){
+                       ## plot
+                       pdf(file = paste0(name, "_",
+                                         gsub(" ", "_", x.lab[i]),
+                                         "_between_groups", ".pdf"),
+                           height = 7, width = 7, bg = "transparent")
+                       plot(density(all.groups.e[[gate]][[x]][, i], adjust = 0.75),
+                            col = "white",
+                            ylim = c(0, y.lim[[gate]][i]),
+                            xlim = c(x.min[i], x.max[i]),
+                            xlab = x.lab[i], main = name)
+
+                       ## map across gates and do so on a per-strain basis
+                       Map(f = function(x, y){
+                               lines(density(all.groups.e[[gate]][[x]][, i],
+                                             adjust = 0.75),
+                                     col = y, lwd = 2)},
+                           x = 1:length(all.groups.e[[gate]]), y = all.cols)
+
+                       ## legend
+                       legend(x = "topleft", legend = strain.names,
+                              lty = 1, lwd = 5,
+                              col = all.cols, bg = "white")
+                       dev.off()
+
+                   })
+        }}, gate = seq_along(all.groups.e), name = names(all.groups.e))
+
+
+##-----
+## <<Between_Groups_Replicates>>
+## [x]
+## between groups w/ replicates
+setwd(results.dir)
+dir.create(path = paste0(results.dir, "/between_groups_w_replicates_plots"))
+between.groups.replicates.dir <- paste0(results.dir, "/between_groups_w_replicates_plots")
+setwd(between.groups.replicates.dir)
+
+Map(f = function(gate, name){
+        for(i in 1:length(x.lab)){
+
+            ## get y limit for density plot
+            lapply(1:length(all.groups.e[[1]]),
+                   function(x){
+                       ## plot
+                       pdf(file = paste0(name, "_",
+                                         gsub(" ", "_", x.lab[i]),
+                                         "_between_groups_w_replicates.pdf"),
+                           height = 7,
+                           width = 7,
+                           bg = "transparent")
+                       
+                       plot(density(all.groups.e[[gate]][[x]][, i], adjust = 0.75),
+                            col = "white",
+                            ylim = c(0, y.lim[[gate]][i]),
+                            xlim = c(x.min[i], x.max[i]),
+                            xlab = x.lab[i],
+                            main = name)
+
+                       ## map across gates and do so on a per-strain basis
+                       Map(f = function(x, y){
+                        lines(density(all.groups.e[[gate]][[x]][, i],
+                                      adjust = 0.75), col = y, lwd = 3)
+                            lapply(1:length(all.data.e[[gate]][[x]]),
+                                   function(n){
+                                       lines(density(all.data.e[[gate]][[x]][[n]][, i],
+                                                     adjust = 0.75),
+                                             col = y,
+                                             lwd = 0.8)})},
+                            x = seq_along(all.groups.e[[gate]]), y = all.cols)
+
+                       ## legend
+                       legend(x = "topleft",
+                              legend = strain.names,
+                              lty = 1, lwd = 5,
+                              col = all.cols, bg = "transparent")
+                       dev.off()
+                   }
+        )}}, gate = 1:length(all.groups.e), name = names(all.groups.e))
+
+
+## -----
+## <<Between_Gates_Plots>>
+## [x]
+## between gates plots
+setwd(results.dir)
+dir.create(path = paste0(results.dir, "/between_gates_plots"))
+between.gates.dir <- paste0(results.dir, "/between_gates_plots")
+setwd(between.gates.dir)
+
+Map(f = function(strain, name){
+        for(i in 1:length(x.lab)){
+
+            ## get y limit for density plot
+            y.lim <- c(0, max(unlist(lapply(1:3,function(x)
+                                            {max(density(all.groups.e[[x]][[strain]][, i])$y)
+                                            }))))
+
+            ## plot 
+            pdf(file = paste0(gsub(" ", "_", x.lab[i]), "_",
+                              gsub(" ", "_", name),
+                              "_between_gates.pdf"),
+                height = 7,
+                width = 7,
+                bg = "transparent")
+            plot(density(all.groups.e[[1]][[strain]][, i],
+                         adjust = 0.75),
+                 col = gray(0.8),
+                 ylim = y.lim,
+                 xlim = c(x.min[i], x.max[i]),
+                 xlab = x.lab[i],
+                 main = name)
+
+            ## map across gates and do so on a per-strain basis
+            Map(f = function(x, y){
+                    lines(density(all.groups.e[[x]][[strain]][, i],
+                                  adjust = 0.75),
+                          col = all.cols[strain],
+                          lty = y,
+                          lwd = 2)},
+                x = 1:3, y = 1:3)
+
+            ## legend
+            legend(x = "topleft",
+                   legend = c("curv", "initial", "ungated"),
+                   lty = 1:3,
+                   lwd = 5,
+                   col = all.cols[strain],
+                   bg = "white",
+                   seg.len = 3)
+            dev.off()
+
+        }
+    }, strain = seq_along(strain.names), name = strain.names)
+
+
+## <<Replicate_Plots>>
+##-----
+## [x]
+## replicate plots
+## this gives a nice layout w/ replicates separately and grouped 
+setwd(results.dir)
+dir.create(path = paste0(results.dir, "/replicate_plots"))
+replicates.dir <- paste0(results.dir, "/replicate_plots")
+setwd(replicates.dir)
+
+lapply(1:length(all.groups.e), function(x){
+           lapply(1:length(all.groups.e[[x]]), function(y){
+                      for(i in 1:length(x.lab)){
+                          pdf(file = paste0(gsub(" ", "_", names(all.groups.e[x])),
+                                            "_",
+                                            gsub(" ", "_", x.lab[i]),
+                                            "_",
+                                            gsub(" ", "_", strain.names[y]),
+                                            "_replicate_plot.pdf"),
+                              height = 7, width = 7,
+                              bg = "transparent")
+
+                          y.i.lim <- c(0, 1.2 * max(density(all.groups.e[[x]][[y]][, i])$y))
+                              plot(density(all.groups.e[[x]][[y]][, i], adjust = 0.75),
+                                   xlab = x.lab[i],
+                                   main = strain.names[y],
+                                   xlim = c(x.min[i], x.max[i]),
+                                   ylim = y.i.lim,
+                                   col = "white")
+
+                              cols <- rainbow(n = length(all.data.e[[x]][[y]]),
+                                              s = 0.7,
+                                              v = 0.7,
+                                              alpha = 1,
+                                              end = 0.8)
+
+                              ## the individual replicates line
+                          lapply(seq_along(all.data.e[[x]][[y]]),
+                                 function(r){lines(density(all.data.e[[x]][[y]][[r]][, i],
+                                                           adjust = 0.75),
+                                                   col = cols[r])})
+                              
+                              names <- fsApply(all.set[[y]], function(x){
+                                                   paste0(x@description$"TUBE NAME")})
+
+                              ## the overall group line
+                              lines(density(all.groups.e[[x]][[y]][, i], adjust = 0.75),
+                                    col = gray(0.7), lwd = 2)
+                              
+                              legend(x = "topleft",
+                                     legend = c(names, "all replicates"),
+                                     lty = 1,
+                                     lwd = 5,
+                                     col = c(cols, gray(0.7)),
+                                     bty = "",
+                                     bg = "transparent")
+
+                          dev.off()
+                      }
+                  })
+                  }
+           )
+
 
 <<stopping_point>>
-
 #+END_SRC
