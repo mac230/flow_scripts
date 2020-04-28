@@ -1,21 +1,19 @@
 # My R script for flow cytometry analysis in R in a literate org doc
 
-[[stopping_point]]
-
-* TODO Issues [62%]
-
-    - [ ] finish formatting so it can run from MSI
-      + might also make a script to move stuff to and from MSI
-        - stick the R CMD batch in the middle, then delete everything when finished
-        - could rsync the dirs too to get all the results, none of the fcs
+* TODO Issues [75%]
 
     - [ ] look into Christian's approach for fsc correction
 
-    - [ ] some 2D correlation plots
+    - [ ] addn. 2D correlation plots
       + FSC w/ fluors
       + FSC/SSC (already have)
       + fluors w/ TFT ratio 
       + all w/ time as neg. ctrl 
+
+    - [X] +finish formatting so it can run from MSI+
+      + +might also make a script to move stuff to and from MSI+
+        - +stick the R CMD batch in the middle, then delete everything when finished+
+        - +could rsync the dirs too to get all the results, none of the fcs+
 
     - [X] +remove any 'adjust = ' from density plots+
       + +test w/ no adjust syntax in plot code+
@@ -588,6 +586,12 @@ There are a lot formatting specifications I had to work into this analysis:
     - [3] had to use 'quote = F' to get proper output from other applications,
           e.g., 'column -t -s ","' 
 
+In addition, setting the decimal precision of 'write.table' was a major
+headache.  I ultimately settled on formatting the table via a separate call to
+'sprintf' as neither 'write.table' nor 'format' produced satisfactory output.
+Note that the formatting needs to be done over a 'for' loop rather than an
+'lapply' call or the assignment operation doesn't work.  
+
 * [[Flow_Cytometry_Statistics]]
 My statistical analysis is relatively basic.  I apply a simple analysis of
 variance using each flow cytometry parameter as a dependent measure and strain
@@ -599,6 +603,22 @@ replicate.  The results of both the main effects analysis and post-hoc tests are
 grabbed via 'capture.output' and written out to separate files, one for the
 mean results and one for the median results.  I write the names of each
 parameter in a header structure to demarcate the various parameters.  
+
+* [[Cell_Count_Stripcharts]]
+The final piece of analysis is to create stripcharts of the cell counts of the
+individual replicates at each gating level.  In principle, this should come
+earlier in the analysis, but I use the 'strain.rep.factor' object here, so for
+now, this will stay late in the analysis.  
+
+The analysis is similar to that used to generate the boxplots for these data.
+The basic approach is to use 'nrow' for each replicate and bind these to an
+individual dataframe.  I use a factor to distinguish the different strain
+backgrounds and perform three plotting operations to generate the stripchart
+
+    - [1] the 'dummy' plot to set up the plot area, axes, titles, etc...
+    - [2] the overplot of the mean line for each strain's cell count
+    - [3] the overplot of the individual replicate data points so that these
+          cover the mean lines. 
 
 * Flow Analysis Source Code
 #+NAME: flow_analysis_master
@@ -884,9 +904,8 @@ xy.fsc.curv.pdf <- function(x){
                  filter = rectangleGate("FSC.A" = fsc.gate.generator(x)),
                  smooth = F))
     dev.off()
-    lapply(all.set, fsApply, xy.fsc.curv.pdf)
     }
-
+lapply(all.set, fsApply, xy.fsc.curv.pdf)
 
 ## plot the fsc density and associated gate
 ## I use 'Map' here to color the plots by strain 
@@ -1026,11 +1045,21 @@ setwd(logicle.dir)
 lapply(1:length(all.data.l), function(x){
            lapply(all.data.l[[x]], function(y){
                       lapply(y, function(q){
-                      pdf(file = paste0(names(all.data[x]), "_", q@description$'TUBE NAME', ".pdf"), height = 7, width = 7)
-                      print(xyplot(`log_RFP` ~ `log_GFP`, data = q,  smooth = F,
-                             strip = paste0(names(all.data[x]), "_", q@description$'TUBE NAME'),
-                             prepanel=function()
-                             {return(list(xlim = c(0, 4), ylim = c(0, 4)))}))
+                                 pdf(file = paste0(names(all.data[x]),
+                                                   "_",
+                                                   q@description$'TUBE NAME',
+                                                   ".pdf"),
+                                     height = 7,
+                                     width = 7)
+                                 print(xyplot(`log_RFP` ~ `log_GFP`,
+                                              data = q,
+                                              smooth = F,
+                                              strip = paste0(names(all.data[x]),
+                                                             " ",
+                                                             gsub("_",
+                                                                  " ",
+                                                                  q@description$'TUBE NAME')),
+                                              prepanel=function(){return(list(xlim = c(0, 4), ylim = c(0, 4)))}))
                       dev.off()
                       })
                   })
@@ -1074,13 +1103,25 @@ for(i in 1:length(all.frame.l)){
 ## 'gsub' here ensures no spaces in file names
 lapply(1:length(all.frame.l), function(x){
            lapply(1:length(all.frame.l[[x]]), function(y){
-                      pdf(file = paste0(names(all.frame.l[x]), "_", gsub(" ", "_", names(all.frame.l[[x]][y])), ".pdf"), height = 7, width = 7)
-                      print(xyplot(`log_RFP` ~ `log_GFP`, data = all.frame.l[[x]][[y]],  smooth = F,
-                                   strip = paste0(names(all.data[x]), " ", names(all.frame.l[[x]][y])),
-                                   prepanel=function()
-                                   {return(list(xlim = c(0, 4), ylim = c(0, 4)))}))
+                      pdf(file = paste0(names(all.frame.l[x]),
+                                        "_",
+                                        gsub(" ", "_",
+                                             names(all.frame.l[[x]][y])), ".pdf"),
+                          height = 7,
+                          width = 7)
+                      print(xyplot(`log_RFP` ~ `log_GFP`,
+                                   data = all.frame.l[[x]][[y]],
+                                   smooth = F,
+                                   strip = paste0(names(all.data[x]),
+                                                  " ",
+                                                  gsub("_", " ", names(all.frame.l[[x]][y]))),
+                                   prepanel=function(){
+                                       return(list(xlim = c(0, 4),
+                                                   ylim = c(0, 4)))
+                                   }))
                       dev.off()
-                  })})
+                  })
+       })
 
 
 ##-----
@@ -1253,64 +1294,6 @@ for(i in seq_along(cell.counts)){
                    sep = "\n")
         }
     }
-
-
-##-----
-## cell count stripcharts 
-## [x]
-## last thing is the replicate cell count plots
-setwd(cell.count.dir)
-individual.cell.counts <- lapply(all.data.e, function(x){
-                                     lapply(x, function(y){
-                                                lapply(y, function(q){
-                                                           nrow(q)
-                                                       })
-                                            })
-                                 })
-
-individual.cell.counts <- lapply(individual.cell.counts, function(x){
-                                     unlist(lapply(x, function(y){
-                                                       unlist(y)
-                                                   }))
-                                 })
-
-individual.cell.dataframe <- Map(f = function(x, y){data.frame(count = x, strain = y)},
-                                 x = individual.cell.counts, y = strain.rep.factor)
-
-individual.mean.lines <- lapply(individual.cell.dataframe, function(x){
-                                    unlist(lapply(strain.names, function(y){
-                                                      mean(x[x$strain == y, 1])
-                                                  }))
-                                })
-
-lapply(1:length(individual.cell.dataframe), function(x){
-           pdf(file = paste0(names(individual.cell.dataframe[x]),
-                             "_individual_cell_count_strip.pdf"),
-               height = 7, width = 7, bg = "transparent")
-           ## dummy chart
-           stripchart(count ~ strain, data = individual.cell.dataframe[[x]],
-                      vertical = T, cex.axis = 0.8, pch = NA, lwd = 1.25,
-                      method = "jitter", jitter = 0.1, ylab = "Cell Count", 
-                      main = names(individual.cell.dataframe[x]))
-           ## plot the mean lines
-           lapply(1:length(strain.names), function(q){
-                                 lines(x = c(q - 0.25, q + 0.25),
-                                       y = rep(individual.mean.lines[[x]][q], 2),
-                                       lwd = 2.5, col = gray(0))})
-           ## overplot the actual values
-           stripchart(count ~ strain,
-                      data = individual.cell.dataframe[[x]],
-                      vertical = T,
-                      cex.axis = 0.8,
-                      pch = 21,
-                      lwd = 1.25,
-                      col = gray(0.2),
-                      bg = gray(0.8),
-                      cex = 1.25,
-                      method = "jitter",
-                      jitter = 0.1, add = T)
-           dev.off()
-       })
 
 
 ##-----
@@ -1917,35 +1900,57 @@ lapply(1:length(all.data.medians), function(x){
 ## <<Summary_Tables>>
 ## [x]
 ## write the data we use for statistics to tables
-## note the various options nad formatting specifications
-## here, as these are necessary to produce output that will
-## work w/ other applications 
+## I format the decimal places to 3 to make reading
+## the output easier.  This is accomplished via
+## 'sprintf', which converts to character, so make
+## separate objects for writing table output 
 setwd(tables.dir)
-lapply(seq_along(all.data.means), function(x){
-           write.table(format(all.data.means[[x]], nsmall = 3),
-                     file = paste0(names(all.data.means[x]),
+all.data.means.round <- all.data.means
+for(i in seq_along(all.data.means.round)){
+        for(h in seq_along(all.data.means.round[[i]])){
+            if(!is.factor(all.data.means.round[[i]][, h]))
+                all.data.means.round[[i]][, h] <- sprintf("%.3f", all.data.means.round[[i]][, h])
+}}
+
+
+lapply(seq_along(all.data.means.round), function(x){
+           write.table(x = all.data.means.round[[x]], 
+                       file = paste0(names(all.data.means.round[x]),
                                    "_sample_means_table.csv"),
-                     ## necessary to prevent empty column
-                     ## where rownames inserted 
-                     col.names = NA,
-                     row.names = T,
-                     ## don't enclose everything in double quotes
-                     quote = F,
-                     sep = ",")}
+                       ## necessary to prevent empty column
+                       ## where rownames inserted 
+                       col.names = NA,
+                       row.names = T,
+                       ## don't enclose everything in double quotes
+                       quote = F,
+                       sep = ",")}
        )
 
-lapply(seq_along(all.data.medians), function(x){
-           write.table(format(all.data.medians[[x]], nsmall = 3),
-                     file = paste0(names(all.data.medians[x]),
-                                   "_sample_medians_table.csv"),
-                     ## necessary to prevent empty column
-                     ## where rownames inserted 
-                     col.names = NA,
-                     row.names = T,
-                     ## don't enclose everything in double quotes
-                     quote = F,
-                     sep = ",")}
+
+## same operation but for medians 
+all.data.medians.round <- all.data.medians
+setwd(tables.dir)
+all.data.medians.round <- all.data.medians
+for(i in seq_along(all.data.medians.round)){
+        for(h in seq_along(all.data.medians.round[[i]])){
+            if(!is.factor(all.data.medians.round[[i]][, h]))
+                all.data.medians.round[[i]][, h] <- sprintf("%.3f", all.data.medians.round[[i]][, h])
+}}
+
+
+lapply(seq_along(all.data.medians.round), function(x){
+           write.table(x = all.data.medians.round[[x]],
+                       file = paste0(names(all.data.medians.round[x]),
+                                     "_sample_medians_table.csv"),
+                       ## necessary to prevent empty column
+                       ## where rownames inserted 
+                       col.names = NA,
+                       row.names = T,
+                       ## don't enclose everything in double quotes
+                       quote = F,
+                       sep = ",")}
        )
+
 
 
 ##-----
@@ -1999,5 +2004,69 @@ lapply(1:length(all.data.medians), function(x){
                           }
                   })
        })
+
+
+##-----
+## <<Cell_Count_Stripcharts>> 
+## [x]
+## last thing is the replicate cell count plots
+## put these into the stripchart format I used above
+## this uses the object 'strain.rep.factor' that isn't 
+## created until late in the code, so this piece of analysis
+## ends up here. 
+setwd(cell.count.dir)
+individual.cell.counts <- lapply(all.data.e, function(x){
+                                     lapply(x, function(y){
+                                                lapply(y, function(q){
+                                                           nrow(q)
+                                                       })
+                                            })
+                                 })
+
+individual.cell.counts <- lapply(individual.cell.counts, function(x){
+                                     unlist(lapply(x, function(y){
+                                                       unlist(y)
+                                                   }))
+                                 })
+
+individual.cell.dataframe <- Map(f = function(x, y){data.frame(count = x, strain = y)},
+                                 x = individual.cell.counts, y = strain.rep.factor)
+
+individual.mean.lines <- lapply(individual.cell.dataframe, function(x){
+                                    unlist(lapply(strain.names, function(y){
+                                                      mean(x[x$strain == y, 1])
+                                                  }))
+                                })
+
+lapply(1:length(individual.cell.dataframe), function(x){
+           pdf(file = paste0(names(individual.cell.dataframe[x]),
+                             "_individual_cell_count_strip.pdf"),
+               height = 7, width = 7, bg = "transparent")
+           ## dummy chart
+           stripchart(count ~ strain, data = individual.cell.dataframe[[x]],
+                      vertical = T, cex.axis = 0.8, pch = NA, lwd = 1.25,
+                      method = "jitter", jitter = 0.1, ylab = "Cell Count", 
+                      main = names(individual.cell.dataframe[x]))
+           ## plot the mean lines
+           lapply(1:length(strain.names), function(q){
+                                 lines(x = c(q - 0.25, q + 0.25),
+                                       y = rep(individual.mean.lines[[x]][q], 2),
+                                       lwd = 2.5, col = gray(0))})
+           ## overplot the actual values
+           stripchart(count ~ strain,
+                      data = individual.cell.dataframe[[x]],
+                      vertical = T,
+                      cex.axis = 0.8,
+                      pch = 21,
+                      lwd = 1.25,
+                      col = gray(0.2),
+                      bg = gray(0.8),
+                      cex = 1.25,
+                      method = "jitter",
+                      jitter = 0.1, add = T)
+           dev.off()
+       })
+
+
 
 #+END_SRC
