@@ -521,7 +521,10 @@ object, 'all.data.means'.  I then loop over each level of all.data.e and compute
 the mean for each parameter.  I make sure that each gate level, strain,
 replicate, and parameter are named using a complicated 'for' loop (can't assign
 names via 'lapply').  The 'rdired' view of 'all.data.means' nicely shows the
-results of the naming operation.  
+results of the naming operation.  One other issue that I had to fix was the
+creation of the 'rep.names' object.  The object creation is now contained within
+the loop (i.e., it is re-assigned at each loop iteration).  This ensures that if
+the number of replicates for two strains differ, the loop operation won't fail.
 
 After creating 'all.data.means', I then create a related object,
 'all.data.mean.lines'.  This object is created by taking the mean of each
@@ -620,6 +623,13 @@ backgrounds and perform three plotting operations to generate the stripchart
     - [3] the overplot of the individual replicate data points so that these
           cover the mean lines. 
 
+* Script_Finished
+When you want to see if the script ran to completion, you can use the command 
+
+'tail ./.Rout'
+
+in the scripts directory.  This should show any errors that came up. 
+
 * Flow Analysis Source Code
 #+NAME: flow_analysis_master
 #+BEGIN_SRC R :tangle ~/data/flow/flow_scripts/flow_analysis_master.R
@@ -682,7 +692,7 @@ source(file = "https://raw.githubusercontent.com/mac230/flow_scripts/master/set2
 ## no trailing '/' at the end!
 base.dir       <- "~/data/flow/2020.03.14_new_gate_testing"
 setwd(base.dir)
-needed.dirs <- c("/fcs", "/results", "/tables")
+needed.dirs <- c("/fcs", "/results", "/tables", "/scripts")
 dir.maker <- function(x){if(!dir.exists(paths = paste0(base.dir, x)))
                              dir.create(path = paste0(base.dir, x))}
 sapply(X = needed.dirs, FUN = dir.maker)
@@ -1661,15 +1671,15 @@ lapply(1:length(all.data.e[[x]][[y]]), function(i){
 })
 
 ## name the gates, strains, and replicates
-rep.names <- vector()
 names(all.data.means) <- names(all.data.e)
-## i = 1:3
+## i = gates
 for(i in seq_along(all.data.means)){
     names(all.data.means[[i]]) <- names(all.groups.e[[i]])
-    ## h = 1:4
+    ## h = strains
     for(h in seq_along(all.data.means[[i]])){
-        ## g = 1:2        
+        ## g = replicates        
         for(g in seq_along(all.data.means[[i]][[h]])){
+            rep.names <- vector()
             rep.names[g] <- all.set[[h]][[g]]@description$"TUBE NAME"
             names(all.data.means[[i]][[h]]) <- rep.names
             names(all.data.means[[i]][[h]][[g]]) <- names(all.groups.e[[1]][[1]])
@@ -1769,7 +1779,7 @@ lapply(1:length(all.data.means), function(x){
 
 
 ## -----
-## <<Replicate_Mean_Stripcharts>>
+## <<Replicate_Median_Stripcharts>>
 ## [x]
 ## start by creating a list of lists identical in size
 ## to the individual replicates list
@@ -1790,15 +1800,15 @@ lapply(1:length(all.data.e[[x]][[y]]), function(i){
 })
 
 ## name the gates, strains, and replicates
-rep.names <- vector()
 names(all.data.medians) <- names(all.data.e)
-## i = 1:3
+## i = gates
 for(i in seq_along(all.data.medians)){
     names(all.data.medians[[i]]) <- names(all.groups.e[[i]])
-    ## h = 1:4
+    ## h = strains
     for(h in seq_along(all.data.medians[[i]])){
-        ## g = 1:2        
+        ## g = replicates        
         for(g in seq_along(all.data.medians[[i]][[h]])){
+            rep.names <- vector()
             rep.names[g] <- all.set[[h]][[g]]@description$"TUBE NAME"
             names(all.data.medians[[i]][[h]]) <- rep.names
             names(all.data.medians[[i]][[h]][[g]]) <- names(all.groups.e[[1]][[1]])
@@ -2066,7 +2076,5 @@ lapply(1:length(individual.cell.dataframe), function(x){
                       jitter = 0.1, add = T)
            dev.off()
        })
-
-
 
 #+END_SRC
