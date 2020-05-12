@@ -1,5 +1,5 @@
 # My R script for flow cytometry analysis in R in a literate org doc
-
+[[STOPPING_POINT]]
 * TODO Issues [75%]
 
     - [ ] look into Christian's approach for fsc correction
@@ -710,8 +710,11 @@ source(file = "https://raw.githubusercontent.com/mac230/flow_scripts/master/set2
 ## user-specified options - these will change for each analysis depending on strains/reporters
 setwd(base.dir)
 needed.dirs <- c("/fcs", "/results", "/tables", "/scripts")
-dir.maker <- function(x){if(!dir.exists(paths = paste0(base.dir, x)))
-                             dir.create(path = paste0(base.dir, x))}
+dir.maker <- function(x){
+    ifelse(!dir.exists(paths = paste0("./", x)),
+           dir.create(path = paste0("./", x)),
+           paste0("dir ", paste0(getwd(), x), " exists."))
+}
 sapply(X = needed.dirs, FUN = dir.maker)
 work.dir       <- paste0(base.dir, "/fcs")
 results.dir    <- paste0(base.dir, "/results")
@@ -877,7 +880,7 @@ initial.split.all <- lapply(all.set, fsApply, initial.split)
 ## [x]
 ## plot the cells w/ their associated filter gate
 setwd(results.dir)
-dir.create(path = paste0(results.dir, "/cell_gate_plots"))
+dir.maker(x = "/cell_gate_plots")
 cell.gate.dir <- paste0(results.dir, "/cell_gate_plots")
 setwd(cell.gate.dir)
 
@@ -1083,7 +1086,7 @@ all.data.l <- lapply(1:length(all.data), function(x){
 ## [x]
 ## logicle plots of individual samples
 setwd(results.dir)
-dir.create(path = paste0(results.dir, "/logicle_2D_plots_individual"))
+dir.maker(x = "/logicle_2D_plots_individual")
 logicle.dir <- paste0(results.dir, "/logicle_2D_plots_individual")
 setwd(logicle.dir)
 
@@ -1116,7 +1119,7 @@ lapply(1:length(all.data.l), function(x){
 ## per gate per group logicle plots
 ## set up lists for each gate
 setwd(results.dir)
-dir.create(path = paste0(results.dir, "/logicle_2D_plots_groups"))
+dir.maker("/logicle_2D_plots_groups")
 logicle.groups.dir <- paste0(results.dir, "/logicle_2D_plots_groups")
 setwd(logicle.groups.dir)
 
@@ -1217,7 +1220,7 @@ cell.data$table.factor <- factor(x = cell.data$table.factor, levels = unique(cel
 ## [x]
 ## box plots of cell counts x group
 setwd(results.dir)
-dir.create(path = paste0(results.dir, "/cell_count_plots"))
+dir.maker(x = "/cell_count_plots")
 cell.count.dir <- paste0(results.dir, "/cell_count_plots")
 setwd(cell.count.dir)
 lapply(1:length(all.data), function(x){
@@ -1282,7 +1285,7 @@ all.data.e <- lapply(all.data, function(x){
 ## [x]
 ## save the data as an R object for later loading if needed
 setwd(base.dir)
-dir.create(path = paste0(base.dir, "/R_objects"))
+dir.maker(x = "/R_objects")
 objs.dir <- paste0(base.dir, "/R_objects")
 setwd(objs.dir)
 ## flowsets
@@ -1346,7 +1349,7 @@ for(i in seq_along(cell.counts)){
 ## [x]
 ## need to add names to individual elements
 setwd(results.dir)
-dir.create(path = paste0(results.dir, "/between_groups_plots"))
+dir.maker(x = "/between_groups_plots")
 between.groups.dir <- paste0(results.dir, "/between_groups_plots")
 setwd(between.groups.dir)
 
@@ -1412,7 +1415,7 @@ Map(f = function(gate, name){
 ## [x]
 ## between groups w/ replicates
 setwd(results.dir)
-dir.create(path = paste0(results.dir, "/between_groups_w_replicates_plots"))
+dir.maker(x = "/between_groups_w_replicates_plots")
 between.groups.replicates.dir <- paste0(results.dir, "/between_groups_w_replicates_plots")
 setwd(between.groups.replicates.dir)
 
@@ -1464,7 +1467,7 @@ Map(f = function(gate, name){
 ## [x]
 ## between gates plots
 setwd(results.dir)
-dir.create(path = paste0(results.dir, "/between_gates_plots"))
+dir.maker(x = "/between_gates_plots")
 between.gates.dir <- paste0(results.dir, "/between_gates_plots")
 setwd(between.gates.dir)
 
@@ -1520,7 +1523,7 @@ Map(f = function(strain, name){
 ## replicate plots
 ## this gives a nice layout w/ replicates separately and grouped 
 setwd(results.dir)
-dir.create(path = paste0(results.dir, "/replicate_plots"))
+dir.maker(x = "/replicate_plots")
 replicates.dir <- paste0(results.dir, "/replicate_plots")
 setwd(replicates.dir)
 
@@ -1582,7 +1585,7 @@ lapply(1:length(all.groups.e), function(x){
 ## <<2D_Scatter_Plots>>
 ## [x]
 setwd(results.dir)
-dir.create(path = paste0(results.dir, "/2D_scatter_plots"))
+dir.maker(x = "/2D_scatter_plots")
 scatterplot.dir <- paste0(results.dir, "/2D_scatter_plots")
 setwd(scatterplot.dir)
 
@@ -1660,7 +1663,7 @@ fac.test <- lapply(fac.test, function(x){
 
 ## create pdfs
 setwd(results.dir)
-dir.create(path = paste0(results.dir, "/between_groups_boxplots"))
+dir.maker(x = "/between_groups_boxplots")
 boxplots.dir <- paste0(results.dir, "/between_groups_boxplots")
 setwd(boxplots.dir)
 
@@ -1772,7 +1775,7 @@ for(i in 1:length(all.data.means)){
 ## now plot across gates/parameters
 ## set up some dirs first
 setwd(results.dir)
-dir.create(path = paste0(results.dir, "/between_groups_mean_stripcharts"))
+dir.maker(x = "/between_groups_mean_stripcharts")
 mean.stripcharts.dir <- paste0(results.dir, "/between_groups_mean_stripcharts")
 setwd(mean.stripcharts.dir)
 
@@ -1903,7 +1906,7 @@ for(i in 1:length(all.data.medians)){
 ## now plot across gates/parameters
 ## set up some dirs first
 setwd(results.dir)
-dir.create(path = paste0(results.dir, "/between_groups_median_stripcharts"))
+dir.maker(x = "/between_groups_median_stripcharts")
 median.stripcharts.dir <- paste0(results.dir, "/between_groups_median_stripcharts")
 setwd(median.stripcharts.dir)
 
@@ -2033,7 +2036,7 @@ Map(f = function(x, name){
 ## [x]
 ## set up directories
 setwd(base.dir)
-dir.create(path = paste0(base.dir, "/statistical_analysis"))
+dir.maker(x = "/statistical_analysis")
 stats.dir <- paste0(base.dir, "/statistical_analysis")
 setwd(stats.dir)
 
@@ -2141,5 +2144,78 @@ lapply(1:length(individual.cell.dataframe), function(x){
                       jitter = 0.1, add = T)
            dev.off()
        })
+
+
+## -----
+## <<TFT_ratio_delta_table>>
+## make the delta TFT ratio table
+## read in the data
+setwd(tables.dir)
+hm.cols <- magma(n = 20)[seq(from = 20, to = 1, by = -1)]
+hmt.mean   <- read.csv(file = "curv_group_means_table.csv", header = T)
+hmt.median <- read.csv(file = "curv_group_medians_table.csv", header = T)
+
+## subset for the parameters we want 
+column.set <- grepl(pattern = "log_GFP|log_RFP|^TFT_ratio", colnames(hmt.mean))
+hmt.mean <- hmt.mean[, column.set]
+hmt.median <- hmt.median[, column.set]
+
+## create a factor for strain that removes the reporter name
+short.strain <- gsub(pattern = " .+", replacement = "", x = row.names(hmt.mean))
+hmt.mean$strain <- factor(x = 1:nrow(hmt), labels = short.strain)
+hmt.median$strain <- factor(x = 1:nrow(hmt), labels = short.strain)
+hmt <- list(hmt.mean, hmt.median)
+names(hmt) <- c("means", "medians")
+
+## get the BY value for a reporter; we'll subtract this
+## from the other strains to get the delta value 
+subtractor <- lapply(hmt, function(x){
+                         x[x$strain == "BY", ]
+                         })
+
+delta.table <- Map(f = function(x, y){
+                       t(apply(X = Filter(Negate(is.factor), x[,]),
+                                MARGIN = 1,
+                                FUN = function(w){
+                                    as.matrix(w - Filter(Negate(is.factor), y))
+                                    }))
+                   }, x = hmt, y = subtractor)
+names(delta.table) <- names(hmt)
+
+## set the names for the matrix
+for(i in seq_along(delta.table)){
+rownames(delta.table[[i]]) <- rownames(hmt[[i]])
+colnames(delta.table[[i]]) <- gsub("_", " ", colnames(Filter(Negate(is.factor), hmt[[i]][,])))
+}
+
+no.by <- lapply(delta.table, function(x){
+                    !grepl(pattern = "BY", x = row.names(x))
+                    })
+
+
+delta.table.no.by <- Map(f = function(x, y){
+                             x[y, ]
+                         }, x = delta.table, y = no.by)
+
+
+heatmap.tables.dir <- "~/data/flow/my_test_tables"
+## <<STOPPING_POINT>>
+
+setwd(heatmap.tables.dir)
+write.table(x = delta.table,
+            file = "mean_all_parameters_w_BY_heatmap_table.txt",
+            append = T,
+            sep = ",",
+            quote = F,
+            col.names = F,
+            row.names = T)
+
+write.table(x = delta.table.no.by,
+            file = "mean_all_parameters_no_BY_heatmap_table.txt",
+            append = T,
+            sep = ",",
+            quote = F,
+            col.names = F,
+            row.names = T)
 
 #+END_SRC
