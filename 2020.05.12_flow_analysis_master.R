@@ -1,3 +1,6 @@
+# can use this block to tangle scripts as needed 
+
+#+BEGIN_SRC R :tangle ~/data/flow/2020.06.19_TDH3pr_mCh_TFT_0656_flow/scripts/2020.07.14_0656_flow_code.R
 ## -----
 ##############
 ## USER INPUT:

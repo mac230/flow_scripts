@@ -108,6 +108,13 @@ all.strains <- list(no.reporter,
 all.set     <- lapply(all.strains, function(x){read.flowSet(files = NULL, path = ".", pattern = x, alter.names = T, min.limit = 1)})
 ## str(all.set[[1]]@phenoData@data$name)
 
+## make sure we use the correct parameters 
+rfp <- "mCherry.A"
+stopifnot(
+    length(
+        grep(pattern = rfp,
+             x = colnames(exprs(all.set[[1]][[1]])))) > 0)
+
 ##################
 ## END USER INPUT:
 ##################
@@ -682,12 +689,15 @@ setwd(between.groups.dir)
 
 ## set up names and limits for parameters - these may have to change
 ## these are for density plots, so x axis is what's below
-## "FSC.A" "SSC.A" "eGFP.A" "mCherry.A" "Time"
-## "log_GFP" "log_RFP" "TFT_ratio" "PSV_ratio" "nl_TFT_ratio"
+## 1 - "FSC.A", 2 - "SSC.A", 3 - "eGFP.A", 4 - "mCherry.A", 5 - "Time"
+## 6 - "log_GFP", 7 - "log_RFP", 8 - "TFT_ratio", 9 - "PSV_ratio", 10 - "nl_TFT_ratio"
 x.lab   <- gsub(pattern = "_", replacement = " ", names(all.groups.e[[1]][[1]]))
 x.min   <- c(0, 0, 0, 0, 0, 2, 2, -6, -2, 0)
 x.max   <- c(2.5e5, 2e5, 2e4, 2e4, 2.5e3, 5, 5, 2, 6, 1)
 leg.pos <- c(rep("topright", 5), "topleft", rep("topright", 3))
+
+## this can help catch errors related to the correct number of parameters above 
+stopifnot(length(exprs(all.set[[1]][[1]][1, ])) == length(x.min))
 
 ## ylim takes the min and max of the density each parameter
 ## i.e., the values will always be low
@@ -1225,6 +1235,8 @@ for(i in 1:length(all.data.medians)){
 }
 
 
+
+
 ## now plot across gates/parameters
 ## set up some dirs first
 setwd(results.dir)
@@ -1288,6 +1300,18 @@ for(i in seq_along(all.data.means.round)){
 }}
 
 
+## group means table
+Map(f = function(x, name){
+        write.table(x = x,
+                    file = paste0(name, "_group_means_table.csv"),
+                    append = F,
+                    quote = F,
+                    sep = ",",
+                    row.names = T)},
+        x = all.data.mean.lines,
+        name = names(all.data.mean.lines)
+)
+
 lapply(seq_along(all.data.means.round), function(x){
            write.table(x = all.data.means.round[[x]], 
                        file = paste0(names(all.data.means.round[x]),
@@ -1325,6 +1349,19 @@ lapply(seq_along(all.data.medians.round), function(x){
                        quote = F,
                        sep = ",")}
        )
+
+## group medians table
+Map(f = function(x, name){
+        write.table(x = x,
+                    file = paste0(name, "_group_medians_table.csv"),
+                    append = F,
+                    quote = F,
+                    sep = ",",
+                    row.names = T)},
+        x = all.data.median.lines,
+        name = names(all.data.median.lines)
+)
+
 
 
 
