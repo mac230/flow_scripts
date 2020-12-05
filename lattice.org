@@ -1220,7 +1220,6 @@ qqmath(~ gcsescore.trans | gender,
 #+RESULTS:
 [[file:/tmp/box-cox.png]]
 
-
 * 5 - Scatter Plots and Extensions
 [[elisp:(mplink "~/foundational_books/lattice.pdf" 81)]]
 
@@ -1439,9 +1438,8 @@ densityplot(fuck)
 xyplot(1:10000 ~ fuck)
 range(fuck)
 fuck[is.na(fuck) == T]
-
-
 #+END_SRC
+
 
 #+BEGIN_SRC R
 ## -----
@@ -1451,14 +1449,24 @@ source("~/emacs/R/functions/load_flow_packages.R")
 #############
 ## USER INPUT
 #############
-base_dir <- "~/data/flow/"
-## work_dir <- paste0(base_dir, "2020.06.28_TDH3pr_mCh_TFT_rpn4_flow/fcs")
-work_dir <- paste0(base_dir, "2020.06.26_TDH3pr_mCh_TFT_0662_flow/fcs")
+reporter_names <- c("Gln_TFT", "Asn_TFT", "Glu_TFT", "Asp_TFT",
+                    "Ile_TFT", "His_TFT", "Tyr_TFT", "Trp_TFT",
+                    "Leu_TFT", "Phe_TFT", "Lys_TFT", "Arg_TFT",
+                    "Thr_TFT", "Met_TFT", "Pro_TFT", "Val_TFT",
+                    "Gly_TFT", "Ser_TFT", "Ala_TFT", "Cys_TFT")
+
+base_dir       <- "~/data/flow/N-end_all_reporters/"
+work_dir       <- paste0(base_dir, "fcs/")
+frame_dir      <- paste0(base_dir, "dataframes/")
+gated_dir      <- paste0(frame_dir, "gated/")
+ungated_dir    <- paste0(frame_dir, "ungated/")
 ## reporter_name <- "rpn4_TFT"
-reporter_name <- "0662_TFT"
+## reporter_name <- "0662_TFT"
 #################
 ## END USER INPUT
 #################
+
+for (k in 1:length(reporter_names)) {
 
 ##-----
 ## [x]
@@ -1476,15 +1484,15 @@ reporter_name <- "0662_TFT"
 ## complete set to those strains present in the actual data I'm analyzing.  I
 ## pre-filter using 'grepl' because 'read.flowset' throws an error if any term
 ## you supply it doesn't match.
-no_reporter  <- paste0(".*untagged.*", reporter_name, ".*fcs") 
-by_strain    <- paste0("BY.*", reporter_name, ".*fcs") 
-rm_strain    <- paste0("RM.*", reporter_name, ".*fcs") 
-rpn4_strain  <- paste0("rpn4.*", reporter_name, ".*fcs") 
-ubr1_strain  <- paste0("ubr1.*", reporter_name, ".*fcs") 
-doa10_strain <- paste0("doa10.*", reporter_name, ".*fcs") 
-pop_1_strain <- paste0("SFA.*pop_001.*", reporter_name, ".*fcs") 
-pop_5_strain <- paste0("SFA.*pop_005.*", reporter_name, ".*fcs") 
-pop_6_strain <- paste0("SFA.*pop_006.*", reporter_name, ".*fcs") 
+no_reporter  <- paste0(".*untagged.*", reporter_names[k], ".*fcs") 
+by_strain    <- paste0("BY.*", reporter_names[k], ".*fcs") 
+rm_strain    <- paste0("RM.*", reporter_names[k], ".*fcs") 
+rpn4_strain  <- paste0("rpn4.*", reporter_names[k], ".*fcs") 
+ubr1_strain  <- paste0("ubr1.*", reporter_names[k], ".*fcs") 
+doa10_strain <- paste0("doa10.*", reporter_names[k], ".*fcs") 
+pop_1_strain <- paste0("SFA.*pop_001.*", reporter_names[k], ".*fcs") 
+pop_5_strain <- paste0("SFA.*pop_005.*", reporter_names[k], ".*fcs") 
+pop_6_strain <- paste0("SFA.*pop_006.*", reporter_names[k], ".*fcs") 
 
 all_strains <- c(no_reporter, by_strain, rm_strain,
                  rpn4_strain, ubr1_strain, doa10_strain,
@@ -1557,8 +1565,8 @@ all_cols <- unlist(sapply(X = cols_list[col_out],
 names(all_cols) <- names(all_set)
 
 ## output a dummmy plot to assess strain/color mapping
-setwd(results.dir)
-pdf(file = "color_mapping.pdf", height = 7, width = 7, bg = "transparent")
+## setwd(results.dir)
+## pdf(file = "color_mapping.pdf", height = 7, width = 7, bg = "transparent")
 barplot(rep(4, length(name_list)), col = all_cols, ylim = c(0, 7))
 box()
 legend(x = "topleft", legend = names(all_set),
@@ -1568,7 +1576,7 @@ legend(x = "topright", y = NA,
        legend = unlist(lapply(X = cols_list, FUN = function(x){identity(x)["name"]})),
        col = unlist(lapply(X = cols_list, FUN = function(x){identity(x)["color"]})),
        lty = 1, lwd = 7.5,  bg = "white")
-dev.off()
+## dev.off()
 
 
 ## a function to gate the cells to include only haploids.
@@ -1618,7 +1626,10 @@ fsc_gate_exprs <- do.call("rbind", fsc_gate_exprs)
 fsc_gate_exprs$log_GFP   <- log10(fsc_gate_exprs$eGFP.A)
 fsc_gate_exprs$log_RFP   <- log10(fsc_gate_exprs$mCherry.A)
 fsc_gate_exprs$TFT_ratio <- log2(fsc_gate_exprs$mCherry.A / fsc_gate_exprs$eGFP.A)
-
+fsc_gate_exprs$reporter  <- as.factor(rep(x = gsub(pattern = "_",
+                                                  replacement = " ",
+                                                  x = reporter_names[k]),
+                                         times = nrow(fsc_gate_exprs)))
 
 ## nested loops for the ungated data
 for (j in 1:length(all_set)){
@@ -1633,12 +1644,378 @@ for (j in 1:length(all_set)){
 ## bind into a single dataframe
 no_gate_exprs <- do.call("rbind", no_gate_exprs)
 
-## add transformation parameters
+## add transformation parameters and reporter var
 no_gate_exprs$log_GFP   <- log10(no_gate_exprs$eGFP.A)
 no_gate_exprs$log_RFP   <- log10(no_gate_exprs$mCherry.A)
 no_gate_exprs$TFT_ratio <- log2(no_gate_exprs$mCherry.A / no_gate_exprs$eGFP.A)
+no_gate_exprs$reporter  <- as.factor(rep(x = gsub(pattern = "_",
+                                                  replacement = " ",
+                                                  x = reporter_names[k]),
+                                         times = nrow(no_gate_exprs)))
+
+## write the ungated data to the appropriate dir
+write.table(x = no_gate_exprs,
+            file = paste0(ungated_dir,
+                          reporter_names[k],
+                          "_all_ungated.csv"),
+            append = F, sep = ",",
+            quote = F, row.names = F)
+
+## write the gated data to the appropriate dir
+write.table(x = fsc_gate_exprs,
+            file = paste0(gated_dir,
+                          reporter_names[k],
+                          "_all_gated.csv"),
+            append = F, sep = ",",
+            quote = F, row.names = F)
+
+    }
 
 
+
+## now, read each reporter's dataframe in and
+## combine into a single dataframe
+dir(gated_dir)
+dir(ungated_dir)
+
+out <- vector(mode = "list", length = length(dir(ungated_dir)))
+for (o in 1:length(dir(gated_dir))) {
+    out[[o]] <- read.table(file = paste0(ungated_dir, dir(ungated_dir)[o]),
+                                 header = T, sep = ",")
+       }
+
+out <- vector(mode = "list", length = length(dir(gated_dir)))
+for (o in 1:length(dir(gated_dir))) {
+    out[[o]] <- read.table(file = paste0(gated_dir, dir(gated_dir)[o]),
+                                 header = T, sep = ",")
+       }
+
+out_all <- do.call("rbind", out)
+out_all
+levels(out_all$reporter)
+
+## Ac/N-end alphabetized
+## ala, cys, gly, met, pro, ser, thr, val
+
+
+aa_order <- c(2, 3, 4, 6, 7, 9, 10, 11, 12, 14, 18, 19, 1, 5, 8, 13, 15, 16, 17, 20)
+aa_order <- c(20, 17, 16, 15, 13, 8, 5, 1, 19, 18, 14, 12, 11, 10, 9, 7, 6, 4, 3, 2)
+
+out_all$strain <- factor(out_all$strain,
+                         levels = levels(out_all$strain)[c(1, 3, 4, 5, 2)])
+
+strain_paste <- expand.grid(unique(out_all$replicate),
+                          levels(out_all$strain))
+
+strain_paste <- paste0(strain_paste$Var2, "_", strain_paste$Var1)
+
+out_all$strain_rep <- factor(paste0(out_all$strain, "_", out_all$replicate),
+                             levels = strain_paste)
+
+rep_cols <- unlist(lapply(X = 1:length(all_cols), FUN = function(x) {
+                       rep(all_cols[x],
+                           times = sum(grepl(pattern = names(all_cols[x]), 
+                                             x = levels(out_all$strain_rep))))
+                   }))
+
+## need to order levels of 'strain_rep' like 'strain'
+
+out_all$o_reporter <- factor(out_all$reporter,
+                             levels = levels(out_all$reporter)[aa_order])
+
+
+fs <- read.table(file = paste0(gated_dir, dir(gated_dir)), header = T, sep = ",")
+
+## [x] pathway text 
+## [x] x label 
+## [x] strain names in legend densityplot
+## [ ] strain names in stripplots 
+## [ ] strain names in heatmap
+## [ ] parameter loop
+
+params <- colnames(out_all)[unlist(lapply(X = out_all, FUN = is.numeric))]
+params[10] <- "log2 TFT Ratio"
+
+## <<density_plot_final>>
+{
+pdf(file = "~/Desktop/den_full_test.pdf", height = 14.5, width = 14)
+print(
+
+densityplot(~ TFT_ratio | reporter,
+            groups = strain_rep,
+            data = out_all,
+            xlim = c(-7, 1.5),
+            ## set alternating = F for one side, same side labeling
+            scales = list(alternating = 3),
+            grid = T,
+            plot.points = F,
+            lwd = 2,
+            main = list(label = "Arg/N-end Reporters"),
+            sub = list(label = "Ac/N-end Reporters"),
+            between = list(x = c(0, 0, 0),
+                           y = c(0, 0, 3)),
+            as.table = T,
+            ylab = ",,",
+            xlab = gsub(pattern = "_",
+                        replacement = " ",
+                        params[10]),
+            index.cond = list(aa_order),
+            par.settings = list(strip.background = list(col = gray(0.9)),
+                                clip = list(panel = FALSE),
+                                par.main.text = list(font = 2,
+                                                     cex = 1.25,
+                                                     just = "center", 
+                                                     x = grid::unit(7, "in")),
+                                par.sub.text = list(font = 2,
+                                                    just = "center",
+                                                    cex = 1.25,
+                                                    x = grid::unit(7.05, "in"),
+                                                    y = grid::unit(5.95, "in")),
+                                axis.text = list(cex = 1),
+                                par.ylab.text = list(cex = 1.25,
+                                                     col = "white"),
+                                par.xlab.text = list(cex = 1.25)),
+            ## legend = list(inside = list(fun = grid.legend,
+            ##                             args = list(labels = c("BY", "RM",
+            ##                                   expression(paste("BY rpn4", Delta)), 
+            ##                                   expression(paste("BY ubr1", Delta)), 
+            ##                                   expression(paste("BY doa10", Delta))),
+            ##                                   do.lines = T,
+            ##                                   nrow = 5,
+            ##                                   draw = T,
+            ##                                   hgap = 1,
+            ##                                   vgap = 0.25,
+            ##                                   gp = gpar(col = all_cols,
+            ##                                             lwd = 5,
+            ##                                             cex = 1,
+            ##                                             lineend = "butt",
+            ##                                             npc = 50
+            ##                                                   )))),
+            ## key = list(text = list(c("BY", "RM",
+            ##                           expression(paste("BY rpn4", Delta)),
+            ##                           expression(paste("BY ubr1", Delta)),
+            ##                           expression(paste("BY doa10", Delta)))),
+            ##             lines = list(col = all_cols,
+            ##                          lwd = 5),
+            ##            corner = c(0, 1),
+            ##            y = 0.98),
+            panel = function(x, y, q, subscripts, ...) {
+                panel.grid(h = -1, v = -1)
+                panel.densityplot(x,
+                                  plot.points = F,
+                                  groups = out_all$strain_rep,
+                                  subscripts = subscripts,
+                                  as.table = T,
+                                  lty = 1,
+                                  col = rep_cols,
+                                  lwd = 0.75)
+                panel.densityplot(x,
+                                  plot.points = F,
+                                  groups = out_all$strain,
+                                  subscripts = subscripts,
+                                  as.table = t,
+                                  lty = 1,
+                                  lwd = 1.5,
+                                  col = all_cols,
+                                  ylim = c(0, 2))
+            })
+
+)
+## <<plot_legend>>
+## this gets placed outside the 'print' call
+## write out a legend using 'grid.text' and 'grid.lines'
+## because I separate the 2 N-end pathways, doubling
+## the legend makes for a better visual layout.
+## turns out there's not a straightforward way to
+## double or position legends built using the lattice
+## 'key' argument or grid.legend.  the code below works,
+## but it's a bit hacky...
+for (k in 1:length(legend_params)) {
+    for (l in 1:length(legend_params[[1]])) {
+        grid.text(label = legend_params[[k]]$names[l],
+                  x = legend_params[[k]]$x_positions[l],
+                  y = legend_params[[k]]$y_positions[l],
+                  default.units = "in",
+                  just = "left",
+                  gp = gpar(col = "black", cex = 1))
+        grid.lines(x = c(legend_params[[k]]$line_x1[l],
+                         legend_params[[k]]$line_x2[l]),
+                   y = c(legend_params[[k]]$y_positions[l],
+                         legend_params[[k]]$y_positions[l]),
+                   default.units = "in",
+                   gp = gpar(lwd = 4, lineend = "butt",
+                             col = legend_params[[k]]$color[l]))
+    }
+}
+
+## replace improper y label positioning w/ custom text
+## and double it since we've split the plot into 2 panels
+grid.text(label = "Density",
+          x = c(0.15, 0.15),
+          y = c(7.5, 2),
+          rot = 90,
+          default.units = "in",
+          gp = gpar(col = "black", cex = 1.25)
+          )
+
+dev.off()
+}
+
+## legend parameters
+## drop everything for building a custom legend
+## into a list.  loop over the list by position
+## ('top' or 'bottom') and strain to make 2
+## legends in the panels 
+top_legend_params <- list()
+top_legend_params$names <- c("BY", "RM",
+                         expression(paste("BY rpn4", Delta)), 
+                         expression(paste("BY ubr1", Delta)), 
+                         expression(paste("BY doa10", Delta)))
+top_legend_params$line_x1     <- rep(0.8, 5)
+top_legend_params$line_x2     <- rep(1.15, 5)    
+top_legend_params$x_positions <- rep(x = 1.2, times = 5)
+top_legend_params$y_positions <- rev(seq(from = 12.7, to = 13.45, length.out = 5))
+top_legend_params$color       <- all_cols
+bot_legend_params <- top_legend_params
+top_legend_params$y_positions <- rev(seq(from = 4.75, to = 5.5, length.out = 5))
+legend_params <- list(top_legend_params, bot_legend_params)
+
+
+
+## <<strip_plots>>
+## these plots are built by extracting the mean/median
+## of each biological replicate of each strain.  Thus,
+## we reduce 10,000 observations of a replicate to a
+## single value.  w/ 8 biological replicates per strain,
+## we can make a nice stripplot of strain * reporter
+## for the different parameters.  We'll also use this
+## to make a levelplot/heatmap
+
+## 'aggregate' creates a new dataframe from x by applying FUN to
+## all unique combinations of the factors supplied to the 'by'
+## argument - in this case, grab the mean of numeric data and
+## keep everything else a factor 
+out_agg <- aggregate.data.frame(x = out_all,
+                                by = list(out_all$strain,
+                                          out_all$reporter,
+                                          out_all$replicate),
+                            FUN = function(x) {
+                                ifelse(is.numeric(x), mean(x), as.factor(x))
+                            })
+
+## 'aggregate' seems to strip the levels from factors, so add
+## these back using the values present in the original dataframe
+out_agg$strain <- factor(out_agg$strain,
+                     levels = unique(out_agg$strain),
+                     labels = levels(out_all$strain))
+
+out_agg$reporter <- factor(out_agg$reporter,
+                     levels = unique(out_agg$reporter),
+                     labels = levels(out_all$reporter))
+
+out_agg$strain_rep <- factor(out_agg$strain_rep,
+                             levels = unique(out_agg$strain_rep),
+                             labels = levels(out_all$strain_rep))
+
+## need a color vector that maps to strains that's the
+## length of levels(strain) * levels(replicate) (usually 40)
+out_agg_cols <- vector()
+for (i in 1:nrow(out_agg)) {
+    out_agg_cols[i] <- all_cols[out_agg$strain[i] == names(all_cols)]
+}
+
+
+{
+pdf(file = "~/Desktop/strip_full_test.pdf", height = 14.5, width = 14)
+print(
+stripplot(TFT_ratio ~ strain | reporter,
+          data = out_agg,
+          col = gray(0),
+          fill = out_agg_cols,
+          pch = 21,
+          cex = 1.1,
+          scales = list(alternating = 3,
+                        x = list(labels = c("BY", "RM",
+                         expression(paste("BY rpn4", Delta)), 
+                         expression(paste("BY ubr1", Delta)), 
+                         expression(paste("BY doa10", Delta))),
+                         rot = 45)),
+          layout = c(4, 5),
+          grid = T,
+          main = list(label = "Arg/N-end Reporters"),
+          sub = list(label = "Ac/N-end Reporters"),
+          between = list(x = c(0, 0, 0),
+                         y = c(0, 0, 3)),
+          as.table = T,
+          par.settings = list(strip.background = list(col = gray(0.9)),
+                              clip = list(panel = FALSE),
+                              par.main.text = list(font = 2,
+                                                   cex = 1.25,
+                                                   just = "center", 
+                                                   x = grid::unit(7, "in"),
+                                                   y = grid::unit(13, "in")),
+                              par.sub.text = list(font = 2,
+                                                  just = "center",
+                                                  cex = 1.25,
+                                                  x = grid::unit(7.05, "in"),
+                                                  y = grid::unit(6.25, "in")),
+                              axis.text = list(cex = 1),
+                              par.ylab.text = list(cex = 1.25,
+                                                   col = "white"),
+                              par.xlab.text = list(cex = 1.25)),
+          jitter.data = T,
+          ## factor for jittering
+          factor = 1.5,
+          index.cond = list(aa_order),
+          horizontal = F)
+)
+
+## main title, not sure why this doesn't show up otherwise
+## probably some par setting re: going outside the grid....
+grid.text(label = "Arg/N-end Reporters",
+          x = 7.0,
+          y = 14.2,
+          default.units = "in",
+          gp = gpar(cex = 1.25, font = 2))
+
+## y axis labels for the strip
+grid.text(label = "log2 TFT ratio",
+          x = c(0.15, 0.15),
+          y = c(7.75, 2.25),
+          rot = 90,
+          default.units = "in",
+          gp = gpar(col = "black", cex = 1.25)
+          )
+dev.off()
+}
+
+rr <- colorRampPalette(c(gray(1), "#551144"))
+
+print(
+
+levelplot(TFT_ratio ~ strain * reporter,
+          strip = T,
+          xlab = "Strain",
+          ylab = "Reporter",
+          data = out_agg,
+          pretty = T,
+          ## col.regions = gray(100:0/100)),
+          col.regions = rr(20),
+          border = gray(0.3),
+          border.lwd = 2)
+)
+
+levels(out_agg$reporter)
+
+test_max <- vector()
+for (i in 1:length(levels(out_agg$reporter))) {
+test_max[i] <- max(out_agg$TFT_ratio[out_agg$reporter == levels(out_agg$reporter)[i]])
+}
+test_max
+
+## log2 reporter max/reporter level 
+
+trellis.par.get()
 
 
 ## TODO 
@@ -1647,7 +2024,7 @@ no_gate_exprs$TFT_ratio <- log2(no_gate_exprs$mCherry.A / no_gate_exprs$eGFP.A)
 ##       + possibly as separate frames, though maybe not necessary
 reporter_var <- as.factor(gsub(pattern = "_",
                                replacement = " ",
-                               x = reporter.name))
+                               x = reporter_name))
 
 
 ## working plots
@@ -1885,7 +2262,9 @@ all_cols <- all_cols[cc]
 ## basically needs to be a repetition of each color n replciate times
 ## demo of using logical subsetting
 ## ddd$strain[1] == names(all_cols)
-
+## regexp filter on unique(c$strain_rep)?
+pdf(file = "~/Desktop/density_test.pdf", height = 5, width = 10)
+print(
 densityplot(~ TFT_ratio | reporter,
             groups = strain_rep,
             data = c,
@@ -1905,17 +2284,20 @@ densityplot(~ TFT_ratio | reporter,
                                   plot.points = F,
                                   groups = c$strain_rep,
                                   subscripts = subscripts,
+                                  lty = 1,
                                   col = xx,
                                   lwd = 1)
                 panel.densityplot(x,
                                   plot.points = F,
                                   groups = c$strain,
                                   subscripts = subscripts,
+                                  lty = 1,
                                   lwd = 4,
                                   col = all_cols,
                                   ylim = c(0, 2))
             })
-
+)
+dev.off()
 
 levelplot(TFT_ratio ~ reporter * strain,
           strip = T,
@@ -1927,6 +2309,8 @@ levelplot(TFT_ratio ~ reporter * strain,
 
 
 ## basic working TFT_ratio ~ strain plot
+## this shows all values, so not
+## esp. useful 
 stripplot(TFT_ratio ~ strain | reporter,
           data = c,
           jitter = T)
@@ -1948,12 +2332,18 @@ ccc <- aggregate(x = c, by = list(c$strain_rep), FUN = function(x) {
           ifelse(is.numeric(x), mean(x), as.factor(x))
           })
 
+## 'aggregate' creates a new dataframe from x by applying FUN to
+## all unique combinations of the factors supplied to the 'by'
+## argument - in this case, grab the mean of numeric data and
+## keep everything else a factor 
 ddd <- aggregate.data.frame(x = c,
                             by = list(c$strain, c$reporter, c$replicate),
                             FUN = function(x) {
                                 ifelse(is.numeric(x), mean(x), as.factor(x))
                             })
 
+## 'aggregate' seems to strip the levels from factors, so add
+## these back using the values present in the original dataframe
 ddd$strain <- factor(ddd$strain,
                      levels = unique(ddd$strain),
                      labels = levels(c$strain))
@@ -1962,35 +2352,76 @@ ddd$reporter <- factor(ddd$reporter,
                      levels = unique(ddd$reporter),
                      labels = levels(c$reporter))
 
+## need a color vector that maps to strains that's the
+## length of levels(strain) * levels(replicate) (usually 40)
 ddd_cols <- vector()
 for (i in 1:nrow(ddd)) {
     ddd_cols[i] <- all_cols[ddd$strain[i] == names(all_cols)]
 }
 
+## now, re-order strain to present levels in the order
+## I'd like (BY, RM, rpn4, ubr1, doa10) instead of the
+## default alphabetical order
 ddd$out_fac <- factor(ddd$strain, levels = levels(ddd$strain)[c(1, 3, 4, 5, 2)])
-## demo of using logical subsetting
-## ddd$strain[1] == names(all_cols)
+
+pdf(file = "~/Desktop/strip_test.pdf", height = 6, width = 10)
+print(
 stripplot(TFT_ratio ~ out_fac | reporter,
           data = ddd,
           col = gray(0),
           fill = ddd_cols,
           pch = 21,
           cex = 1.1,
+          
           scales = list(alternating = F),
           layout = c(2, 1),
           grid = T,
           par.settings = list(strip.background = list(col = gray(0.9))),
           jitter.data = T,
           ## factor for jittering
-          factor = 1.5,
+          factor = 1.25,
           horizontal = F)
+)
+dev.off()
+expression(paste("rpn4", Delta))
 
+rr <- colorRampPalette(c(gray(0.4), "white", "#882255"))
+rr <- colorRampPalette(c("white", "#C92AA4"))
+rr <- colorRampPalette(c("white", "black"))
+## needs x axis label
 
-levelplot(TFT_ratio ~ strain * reporter,
+pdf(file = "~/Desktop/heat_test.pdf", height = 4, width = 9)
+print(
+levelplot(TFT_ratio ~ out_fac * reporter,
           strip = T,
-          data = ccc)
+          xlab = "Strain",
+          ylab = "Reporter",
+          data = ddd,
+          pretty = T,
+          ## col.regions = gray(100:0/100)),
+          col.regions = rr(20),
+          border = gray(0.3),
+          border.lwd = 2)
+)
+dev.off()
 
-unique(ccc$reporter)
+
+## adds a grid via 'type = c("g")'
+xyplot(log_GFP ~ log_RFP,
+       data = c,
+       panel = function(x, y, ...) {
+           panel.fill(col = gray(1))
+           panel.grid(h = -1, v = -1,
+                      col.line = gray(0.9), lwd = 1.5)
+           panel.xyplot(x, y,
+                        type = "p",
+                        pch = ".",
+                        cex = 2,
+                        col.symbol = rgb(0, 0, 0, 0.01)
+                      )
+}
+)
+
 
 ## you can 'rbind' the dataframes together 
 ## a <- data.frame(a = 1:5, b = 11:15)
@@ -1998,6 +2429,15 @@ unique(ccc$reporter)
 ## c <- rbind(a, b) ## works
 
 #+END_SRC
+
+# need to figure out how to plot delta symbols
+# https://stats.idre.ucla.edu/r/codefragments/greek_letters/
+#+BEGIN_SRC R :results graphics :file /tmp/delta.pdf
+barplot(c(4,4,4), ylab = expression(paste("BY rpn4", Delta)))
+#+END_SRC
+
+#+RESULTS:
+[[file:/tmp/delta.pdf]]
 
 * Local Variables                                                  :noexport:
 Local Variables:
